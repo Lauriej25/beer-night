@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Beer Night 🍻</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#17100A; --card:#241910; --edge:#3A2A1A;
+    --amber:#F2A81D; --amber-deep:#C97E12;
+    --foam:#F7EFDD; --muted:#9C8467; --danger:#C4502E;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; min-height:100vh; color:var(--foam);
+    background:radial-gradient(1200px 500px at 50% -10%, #2A1C0F, var(--bg));
+    font-family:system-ui,-apple-system,sans-serif; padding-bottom:70px;
+  }
+  .wrap{max-width:560px;margin:0 auto;padding:10px 16px;}
+  header{display:flex;align-items:center;justify-content:space-between;padding:18px 16px 6px;max-width:560px;margin:0 auto;}
+  .logo{font-family:'Lilita One',system-ui;font-size:28px;color:var(--amber);margin:0;letter-spacing:.5px;text-shadow:0 2px 0 #0005;display:flex;align-items:center;gap:10px;}
+  h2.section{font-family:'Lilita One',system-ui;font-size:16px;margin:22px 4px 10px;letter-spacing:.4px;}
+  .card{background:var(--card);border:1px solid var(--edge);border-radius:16px;padding:16px;}
+  .row{display:flex;gap:8px;}
+  input{
+    flex:1;background:#130D07;border:1px solid var(--edge);border-radius:12px;
+    padding:12px 14px;color:var(--foam);font-size:16px;min-width:0;
+  }
+  input::placeholder{color:var(--muted);opacity:.7;}
+  button{cursor:pointer;font-size:16px;}
+  button:disabled{opacity:.45;cursor:not-allowed;}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px;}
+  .btn{
+    background:var(--amber);color:#241300;border:none;border-radius:12px;
+    padding:12px 18px;font-family:'Lilita One',system-ui;letter-spacing:.4px;
+  }
+  .ghost{background:transparent;color:var(--muted);border:1px solid var(--edge);border-radius:12px;padding:10px 16px;font-size:14px;}
+  .ghost.danger{color:var(--danger);border-color:var(--danger);}
+  .back{background:none;border:none;color:var(--amber);font-family:'Lilita One',system-ui;font-size:15px;padding:6px 4px;}
+  .night-row{
+    display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;
+    background:var(--card);border:1px solid var(--edge);border-radius:16px;
+    padding:14px 16px;margin-bottom:10px;text-align:left;color:var(--foam);
+  }
+  .night-name{font-family:'Lilita One',system-ui;font-size:18px;}
+  .night-meta{color:var(--muted);font-size:13px;margin-top:2px;}
+  .live{background:var(--amber);color:#241300;font-size:10px;font-weight:700;letter-spacing:1px;border-radius:999px;padding:2px 8px;margin-left:8px;vertical-align:middle;font-family:system-ui;}
+  .person{
+    position:relative;overflow:hidden;background:var(--card);
+    border:1px solid var(--edge);border-radius:14px;padding:14px 12px;margin-bottom:10px;
+  }
+  .fill{
+    position:absolute;left:0;top:0;bottom:0;border-radius:14px;
+    background:linear-gradient(90deg,#C97E1255,#F2A81D44);
+    border-right:3px solid #F7EFDDcc;transition:width .35s ease;
+  }
+  @media (prefers-reduced-motion:reduce){ .fill{transition:none;} }
+  .person-inner{position:relative;display:flex;align-items:center;gap:8px;}
+  .rank{width:24px;text-align:center;color:var(--muted);font-size:14px;}
+  .pname{flex:1;font-family:'Lilita One',system-ui;font-size:17px;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pcount{color:var(--amber);font-family:'Lilita One',system-ui;font-size:22px;min-width:26px;text-align:right;}
+  .plus{background:var(--amber);color:#241300;border:none;border-radius:12px;min-width:64px;height:46px;font-family:'Lilita One',system-ui;font-size:15px;padding:0 8px;}
+  .plus.cooling{background:#3A2A1A;color:var(--muted);font-family:system-ui;font-size:13px;}
+  .cam{background:transparent;border:1px solid var(--edge);border-radius:12px;width:44px;height:46px;font-size:17px;color:var(--foam);}
+  .x{background:none;border:none;color:var(--muted);font-size:18px;width:24px;height:46px;}
+  .hint{color:var(--muted);font-size:12px;margin-top:18px;line-height:1.5;}
+  .status{color:var(--muted);font-size:12px;}
+  .error{max-width:560px;margin:0 auto 8px;padding:10px 16px;color:#FFD9CC;background:#4A1F10;border-radius:12px;font-size:14px;}
+  .muted-center{color:var(--muted);text-align:center;}
+  .room-pill{background:transparent;border:1px solid var(--edge);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:13px;}
+  .setup{line-height:1.65;font-size:15px;}
+  .setup code{background:#130D07;border:1px solid var(--edge);border-radius:6px;padding:2px 6px;font-size:13px;color:var(--amber);}
+  .setup ol{padding-left:20px;margin:10px 0;}
+  .setup li{margin-bottom:8px;}
+  a{color:var(--amber);}
+  .gallery{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+  .shot{border:1px solid var(--edge);border-radius:12px;overflow:hidden;background:#130D07;}
+  .shot img{width:100%;display:block;aspect-ratio:3/4;object-fit:cover;}
+  .shot .ts{font-size:10px;color:var(--muted);padding:4px 6px;text-align:center;}
+  .modal{
+    position:fixed;inset:0;background:#000c;display:flex;align-items:center;justify-content:center;
+    z-index:50;padding:20px;
+  }
+  .modal img{max-width:100%;max-height:80vh;border-radius:16px;border:2px solid var(--edge);}
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--amber);color:#241300;font-family:'Lilita One',system-ui;
+    padding:12px 22px;border-radius:999px;font-size:16px;z-index:60;box-shadow:0 4px 20px #000a;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+  BEER NIGHT v2 — photo-proof edition 📸🍺
+  Every point requires a photo with your drink, and each player
+  must wait 3 minutes between drinks (anti-cheat cooldown).
+
+  ONE-TIME SETUP (~5 minutes, free forever on the Spark plan):
+  1. Go to https://console.firebase.google.com and create a project
+     (call it anything, e.g. "beer-night"; Analytics off is fine).
+  2. In the project: Build > Realtime Database > Create database
+     > choose a location > start in TEST MODE.
+  3. IMPORTANT — test mode expires after 30 days. To make it
+     permanent, go to Realtime Database > Rules and replace with:
+
+       {
+         "rules": {
+           "rooms": {
+             ".read": true,
+             ".write": true
+           }
+         }
+       }
+
+     This never expires and keeps you on the free plan. Anyone
+     with your database URL can write, so share the app link only
+     with friends and keep nothing private in it.
+  4. Project settings (gear icon) > Your apps > Web app (</>) >
+     register app > copy the firebaseConfig object.
+  5. Paste it below over the PASTE_ placeholders.
+  6. Host this file anywhere (Netlify Drop / GitHub Pages / your
+     own machine) and share the URL + room code with friends.
+
+  STAYING FREE: never add a billing card / never upgrade to the
+  Blaze plan — Firebase then simply can't charge you. The app
+  compresses photos to ~25KB and only downloads them when someone
+  opens a gallery, keeping you far inside the free limits
+  (1 GB stored / 10 GB downloaded per month). Delete old nights
+  now and then to reclaim space.
+============================================================ -->
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyAutzY4EwNTx0HGojmKe8ZHKZhfWaNYCUc",
+    authDomain: "beer-night-7ca7c.firebaseapp.com",
+    databaseURL: "https://beer-night-7ca7c-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "beer-night-7ca7c",
+    storageBucket: "beer-night-7ca7c.firebasestorage.app",
+    messagingSenderId: "327161618916",
+    appId: "1:327161618916:web:2fa3aebb903a8c8730a7f1"
+  };
+  // Cooldown between drinks per player (milliseconds). 3 minutes minimum.
+  const COOLDOWN_MS = 3 * 60 * 1000;
+</script>
+
+<header>
+  <h1 class="logo">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 3h10l-1 17a2 2 0 0 1-2 1.9H9A2 2 0 0 1 7 20L6 3Z" fill="#F2A81D" opacity=".9"/>
+      <path d="M6.2 6.5h9.6L15.6 3H6.4l-.2 3.5Z" fill="#F7EFDD"/>
+      <path d="M16.5 7h2.3a2 2 0 0 1 2 2.3l-.6 4a2 2 0 0 1-2 1.7h-2" stroke="#F2A81D" stroke-width="1.6"/>
+    </svg>
+    Beer Night
+  </h1>
+  <span id="status" class="status"></span>
+</header>
+
+<div id="errorBar" class="error" style="display:none;"></div>
+<main class="wrap" id="app"></main>
+<input type="file" id="camInput" accept="image/*" capture="user" style="display:none;">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue, set, get, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const $ = (sel) => document.querySelector(sel);
+const app = $("#app");
+const statusEl = $("#status");
+const errorBar = $("#errorBar");
+const camInput = $("#camInput");
+const uid = () => Math.random().toString(36).slice(2, 9);
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const dateLabel = (iso) => { try { return new Date(iso).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'}); } catch { return iso; } };
+const timeLabel = (ts) => new Date(ts).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+
+// ---------- state ----------
+let db=null, roomCode=null, dataRef=null, unsubscribe=null;
+let data = { nights: {} };
+let view = { page:"home", nightId:null, galleryPid:null };
+let pendingPhoto = null;           // {pid} while waiting for camera
+let tick = null;                   // cooldown countdown timer
+const photoCache = {};             // photoId -> base64 (fetched on demand)
+
+// ---------- config check ----------
+const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("PASTE");
+if (!configured) { renderSetup(); }
+else {
+  try {
+    const fbApp = initializeApp(firebaseConfig);
+    db = getDatabase(fbApp);
+    startRoomFlow();
+  } catch(e) {
+    showError("Firebase failed to start — double-check the config pasted into this file.");
+    renderSetup();
+  }
+}
+
+function showError(msg){ errorBar.textContent = msg; errorBar.style.display = msg ? "block" : "none"; }
+function toast(msg){
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>t.remove(), 2200);
+}
+
+// ---------- setup screen ----------
+function renderSetup(){
+  app.innerHTML = `
+    <div class="card setup">
+      <h2 class="section" style="margin-top:0;">One-time setup 🍺</h2>
+      <p>This app needs a free Firebase database so everyone's phones stay in sync. Takes about 5 minutes:</p>
+      <ol>
+        <li>Go to <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a> and create a project.</li>
+        <li>Build → <b>Realtime Database</b> → Create database → start in <b>test mode</b>.</li>
+        <li>Replace the rules with the permanent ones in this file's comments (test mode expires in 30 days).</li>
+        <li>Project settings ⚙️ → Your apps → add a <b>Web app</b> → copy the <code>firebaseConfig</code>.</li>
+        <li>Paste it over the <code>PASTE_...</code> placeholders near the top of this file.</li>
+        <li>Host the file (Netlify Drop is easiest) and share the link + room code with friends.</li>
+      </ol>
+      <p>Full instructions, including how it stays free forever, are in comments inside this file.</p>
+    </div>`;
+}
+
+// ---------- room flow ----------
+function startRoomFlow(){
+  // Scanning a Beer Night QR opens ...?room=CODE and drops you straight in
+  const param = new URLSearchParams(location.search).get("room");
+  if (param) {
+    const code = param.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if (code) { joinRoom(code); return; }
+  }
+  const saved = localStorage.getItem("beernight-room");
+  if (saved) joinRoom(saved); else renderRoomPicker();
+}
+
+function renderRoomPicker(){
+  statusEl.textContent = "";
+  app.innerHTML = `
+    <div class="card">
+      <h2 class="section" style="margin-top:0;">Join your crew</h2>
+      <p style="color:var(--muted);font-size:14px;margin-top:0;">Pick a room code and share it with your friends — everyone who enters the same code sees the same leaderboard.</p>
+      <div class="row">
+        <input id="roomInput" placeholder="e.g. SCORE1" maxlength="12" autocapitalize="characters">
+        <button class="btn" id="roomGo">Go</button>
+      </div>
+    </div>`;
+  const input = $("#roomInput");
+  const go = () => {
+    const code = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if (code) joinRoom(code);
+  };
+  $("#roomGo").onclick = go;
+  input.onkeydown = (e)=> e.key==="Enter" && go();
+  input.focus();
+}
+
+function joinRoom(code){
+  roomCode = code;
+  localStorage.setItem("beernight-room", code);
+  if (unsubscribe) unsubscribe();
+  // NOTE: scores live under /data — photos live separately under /photos
+  // so the live listener never downloads image blobs.
+  dataRef = ref(db, `rooms/${code}/data`);
+  statusEl.textContent = "connecting…";
+  unsubscribe = onValue(dataRef, (snap)=>{
+    data = snap.val() || { nights: {} };
+    if (!data.nights) data.nights = {};
+    statusEl.textContent = "room " + code;
+    showError("");
+    render();
+  }, ()=> showError("Can't reach the database. Check your connection (or database rules if test mode expired)."));
+}
+
+function leaveRoom(){
+  localStorage.removeItem("beernight-room");
+  if (unsubscribe) unsubscribe();
+  roomCode=null; data={nights:{}}; view={page:"home",nightId:null,galleryPid:null};
+  renderRoomPicker();
+}
+
+async function saveData(){
+  try{
+    statusEl.textContent = "saving…";
+    await set(dataRef, data);
+    statusEl.textContent = "room " + roomCode;
+  }catch(e){ showError("Couldn't save — check your connection and try again."); }
+}
+
+// ---------- photo helpers ----------
+function compressImage(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      const MAX = 400;
+      let {width:w, height:h} = img;
+      const scale = Math.min(1, MAX / Math.max(w,h));
+      w = Math.round(w*scale); h = Math.round(h*scale);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      resolve(cv.toDataURL("image/jpeg", 0.55)); // ~15–30 KB
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function downloadDataUrl(dataUrl, name){
+  const a = document.createElement("a");
+  a.href = dataUrl; a.download = name; a.click();
+}
+async function shareDataUrl(dataUrl, name){
+  try{
+    const blob = await (await fetch(dataUrl)).blob();
+    const file = new File([blob], name, { type: "image/jpeg" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "Beer Night 🍺" });
+    } else {
+      downloadDataUrl(dataUrl, name);
+    }
+  }catch(e){ /* user cancelled share — fine */ }
+}
+
+camInput.addEventListener("change", async ()=>{
+  const file = camInput.files[0];
+  camInput.value = "";
+  if (!file || !pendingPhoto) { pendingPhoto = null; return; }
+  // first-run camera check — no point awarded, just confirms the camera flow works
+  if (pendingPhoto.test) {
+    pendingPhoto = null;
+    localStorage.setItem("beernight-camok", "1");
+    toast("📷 Camera works — you're ready! 🍺");
+    render();
+    return;
+  }
+  const { pid } = pendingPhoto;
+  pendingPhoto = null;
+  const n = data.nights[view.nightId];
+  const p = n?.people?.[pid];
+  if (!n || !p || n.ended) return;
+
+  // re-check cooldown at submission time (photo can't be pre-taken to skip it)
+  const last = latestDrinkTs(p);
+  if (last && Date.now() - last < COOLDOWN_MS) {
+    toast("⏳ Too soon — pace yourself!");
+    return;
+  }
+
+  try{
+    statusEl.textContent = "uploading photo…";
+    const b64 = await compressImage(file);
+    const drinkId = uid();
+    // photo stored separately so live sync stays lightweight
+    await set(ref(db, `rooms/${roomCode}/photos/${drinkId}`), b64);
+    if (!p.drinks) p.drinks = {};
+    p.drinks[drinkId] = { ts: Date.now() };
+    photoCache[drinkId] = b64;
+    await saveData();
+    toast(`🍺 +1 for ${p.name}!`);
+  }catch(e){
+    showError("Photo upload failed — try again.");
+    statusEl.textContent = "room " + roomCode;
+  }
+});
+
+// ---------- helpers ----------
+const drinksOf = (p) => Object.entries(p.drinks || {}).sort((a,b)=>a[1].ts-b[1].ts);
+const countOf = (p) => Object.keys(p.drinks || {}).length;
+const latestDrinkTs = (p) => {
+  const d = drinksOf(p);
+  return d.length ? d[d.length-1][1].ts : null;
+};
+const cooldownLeft = (p) => {
+  const last = latestDrinkTs(p);
+  if (!last) return 0;
+  return Math.max(0, COOLDOWN_MS - (Date.now() - last));
+};
+const fmtLeft = (ms) => {
+  const s = Math.ceil(ms/1000);
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+};
+
+// ---------- actions ----------
+window.actions = {
+  createNight(){
+    const name = $("#nightName").value.trim() || "Untitled night";
+    const id = uid();
+    data.nights[id] = { id, name, date:new Date().toISOString(), ended:false, people:{} };
+    view = { page:"night", nightId:id, galleryPid:null };
+    saveData(); render();
+  },
+  openNight(id){ view={page:"night",nightId:id,galleryPid:null}; render(); },
+  goHome(){ view={page:"home",nightId:null,galleryPid:null}; render(); },
+  addPerson(){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const name = $("#personName").value.trim(); if(!name) return;
+    if(!n.people) n.people = {};
+    const id = uid();
+    n.people[id] = { id, name, drinks:{} };
+    saveData(); render();
+  },
+  requestDrink(pid){
+    const n = data.nights[view.nightId]; if(!n || n.ended) return;
+    const p = n.people?.[pid]; if(!p) return;
+    if (cooldownLeft(p) > 0) { toast("⏳ Too soon — pace yourself!"); return; }
+    pendingPhoto = { pid };
+    camInput.click(); // opens camera — photo required to earn the point
+  },
+  async undoDrink(pid){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const p = n.people?.[pid]; if(!p) return;
+    const d = drinksOf(p);
+    if (!d.length) return;
+    if (!confirm(`Remove ${p.name}'s latest drink (and its photo)?`)) return;
+    const [drinkId] = d[d.length-1];
+    delete p.drinks[drinkId];
+    try{ await remove(ref(db, `rooms/${roomCode}/photos/${drinkId}`)); }catch(e){}
+    delete photoCache[drinkId];
+    saveData(); render();
+  },
+  removePerson(pid){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const p = n.people?.[pid];
+    if (p && countOf(p) > 0 && !confirm(`Remove ${p.name} and their ${countOf(p)} drink photos?`)) return;
+    if (p?.drinks) for (const id of Object.keys(p.drinks)) {
+      remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
+      delete photoCache[id];
+    }
+    delete n.people[pid];
+    saveData(); render();
+  },
+  toggleEnded(){
+    const n = data.nights[view.nightId]; if(!n) return;
+    n.ended = !n.ended;
+    saveData(); render();
+  },
+  deleteNight(){
+    const n = data.nights[view.nightId]; if(!n) return;
+    if (!confirm("Delete this night (and all its photos) for everyone in the room?")) return;
+    for (const p of Object.values(n.people || {}))
+      for (const id of Object.keys(p.drinks || {})) {
+        remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
+        delete photoCache[id];
+      }
+    delete data.nights[view.nightId];
+    view = {page:"home",nightId:null,galleryPid:null};
+    saveData(); render();
+  },
+  async openGallery(pid){
+    view.galleryPid = pid;
+    render();               // renders placeholders first
+    await loadGalleryPhotos(pid);
+    render();               // then fills in images
+  },
+  closeGallery(){ view.galleryPid = null; render(); },
+  viewPhoto(id){
+    const b64 = photoCache[id]; if(!b64) return;
+    const m = document.createElement("div");
+    m.className = "modal";
+    m.style.flexDirection = "column";
+    m.innerHTML = `
+      <img src="${b64}" alt="Drink proof photo">
+      <div style="display:flex;gap:10px;margin-top:14px;">
+        <button class="btn" id="phDl">⬇️ Download</button>
+        <button class="btn" id="phSh">📤 Share</button>
+        <button class="ghost" id="phX" style="color:var(--foam);">Close</button>
+      </div>`;
+    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    m.querySelector("#phDl").onclick = (e)=>{ e.stopPropagation(); downloadDataUrl(b64, `beer-night-photo-${id}.jpg`); };
+    m.querySelector("#phSh").onclick = async (e)=>{ e.stopPropagation(); await shareDataUrl(b64, `beer-night-photo-${id}.jpg`); };
+    m.querySelector("#phX").onclick = (e)=>{ e.stopPropagation(); m.remove(); };
+    document.body.appendChild(m);
+  },
+  showInvite(){ view = { ...view, page:"invite" }; render(); },
+  closeInvite(){ view = { ...view, page: view.nightId ? "night" : "home" }; render(); },
+  setQRStyle(style){
+    localStorage.setItem("beernight-qrstyle", style);
+    render();
+  },
+  downloadQR(){
+    const cv = document.getElementById("qrCanvas");
+    if (!cv) return;
+    const style = localStorage.getItem("beernight-qrstyle") || "mug";
+    const a = document.createElement("a");
+    a.download = `beer-night-${roomCode}-${style}.png`;
+    a.href = cv.toDataURL("image/png");
+    a.click();
+  },
+  testCamera(){
+    pendingPhoto = { test: true };
+    camInput.click();
+  },
+  openRecap(nid){
+    markRecapSeen(nid);
+    view = { page:"recap", nightId:nid, galleryPid:null };
+    render();
+  },
+  closeRecap(){ view = { page:"home", nightId:null, galleryPid:null }; render(); },
+  async playSlideshow(nid, pid){ await startSlideshow(nid, pid); },
+  leaveRoom(){ leaveRoom(); },
+};
+
+async function loadGalleryPhotos(pid, nid = view.nightId){
+  const n = data.nights[nid]; if(!n) return;
+  const p = n.people?.[pid]; if(!p) return;
+  const ids = Object.keys(p.drinks || {}).filter(id => !photoCache[id]);
+  await Promise.all(ids.map(async (id)=>{
+    try{
+      const snap = await get(ref(db, `rooms/${roomCode}/photos/${id}`));
+      if (snap.exists()) photoCache[id] = snap.val();
+    }catch(e){}
+  }));
+}
+
+// ---------- render ----------
+function render(){
+  if (!roomCode) return;
+  clearInterval(tick);
+  const nights = Object.values(data.nights || {}).sort((a,b)=> new Date(b.date)-new Date(a.date));
+
+  if (view.page === "invite") return renderInvite();
+  if (view.page === "recap") return renderRecap(view.nightId);
+
+  if (view.page === "night") {
+    const n = data.nights[view.nightId];
+    if (n) return renderNight(n);
+    view = {page:"home",nightId:null,galleryPid:null};
+  }
+
+  // Morning After: auto-open yesterday's results once, from 10am local time
+  const rc = recapNight();
+  if (rc.unseen && new Date().getHours() >= 10) {
+    markRecapSeen(rc.unseen.id);
+    view = { page:"recap", nightId:rc.unseen.id, galleryPid:null };
+    return renderRecap(rc.unseen.id);
+  }
+
+  app.innerHTML = `
+    ${!localStorage.getItem("beernight-camok") ? `
+    <button class="night-row" style="border-color:var(--amber);" onclick="actions.testCamera()">
+      <span>
+        <span class="night-name">📷 Quick camera check</span>
+        <span class="night-meta" style="display:block;">Every point needs a photo — tap to test your camera now so night one runs smoothly.</span>
+      </span>
+      <span style="color:var(--amber);font-size:20px;">›</span>
+    </button>` : ""}
+    ${rc.unseen ? `
+    <button class="night-row" style="border-color:var(--amber);" onclick="actions.openRecap('${rc.unseen.id}')">
+      <span>
+        <span class="night-name">🌅 Morning After</span>
+        <span class="night-meta" style="display:block;">The results from ${esc(rc.unseen.name)} are in — tap for standings &amp; slideshows.</span>
+      </span>
+      <span style="color:var(--amber);font-size:20px;">›</span>
+    </button>` : ""}
+    <div class="card">
+      <h2 class="section" style="margin-top:0;">Start a night</h2>
+      <div class="row">
+        <input id="nightName" placeholder="e.g. Friday at The Anchor" maxlength="40">
+        <button class="btn" onclick="actions.createNight()">Start</button>
+      </div>
+    </div>
+    <h2 class="section">Nights</h2>
+    ${nights.length===0 ? `<div class="card muted-center">No nights yet. Start one above and add your friends.</div>` : ""}
+    ${nights.map(n=>{
+      const people = Object.values(n.people || {});
+      const total = people.reduce((s,p)=>s+countOf(p),0);
+      const leader = [...people].sort((a,b)=>countOf(b)-countOf(a))[0];
+      return `
+      <button class="night-row" onclick="actions.openNight('${n.id}')">
+        <span>
+          <span class="night-name">${esc(n.name)}${n.ended ? "" : '<span class="live">LIVE</span>'}</span>
+          <span class="night-meta" style="display:block;">${dateLabel(n.date)} · ${people.length} ${people.length===1?"person":"people"} · ${total} drinks${leader && countOf(leader)>0 ? " · 👑 "+esc(leader.name) : ""}</span>
+        </span>
+        <span style="color:var(--amber);font-size:20px;">›</span>
+      </button>`;
+    }).join("")}
+    <div style="margin-top:24px;text-align:center;display:flex;gap:8px;justify-content:center;">
+      <button class="btn" onclick="actions.showInvite()">🍺 Invite QR</button>
+      <button class="room-pill" onclick="actions.leaveRoom()">Switch room (${esc(roomCode)})</button>
+    </div>`;
+  const ni = $("#nightName");
+  if (ni) ni.onkeydown = (e)=> e.key==="Enter" && actions.createNight();
+}
+
+// ---------- morning after: recap & slideshows ----------
+function markRecapSeen(id){
+  const seen = JSON.parse(localStorage.getItem("beernight-recap-seen") || "[]");
+  if (!seen.includes(id)) {
+    seen.push(id);
+    localStorage.setItem("beernight-recap-seen", JSON.stringify(seen));
+  }
+}
+
+function recapNight(){
+  const seen = JSON.parse(localStorage.getItem("beernight-recap-seen") || "[]");
+  const today = new Date(); today.setHours(0,0,0,0);
+  const nights = Object.values(data.nights || {})
+    .filter(n=>{
+      const d = new Date(n.date); d.setHours(0,0,0,0);
+      const total = Object.values(n.people || {}).reduce((s,p)=>s+countOf(p),0);
+      return d < today && total > 0;
+    })
+    .sort((a,b)=> new Date(b.date)-new Date(a.date));
+  return { latest: nights[0] || null, unseen: nights.find(n=>!seen.includes(n.id)) || null };
+}
+
+const posSuffix = (pos) => {
+  const v = pos % 100;
+  if (v >= 11 && v <= 13) return "th";
+  return ["th","st","nd","rd"][pos % 10] || "th";
+};
+
+function renderRecap(nid){
+  const n = data.nights[nid];
+  if (!n) { view = { page:"home", nightId:null, galleryPid:null }; return render(); }
+  const people = Object.values(n.people || {}).sort((a,b)=> countOf(b)-countOf(a) || a.name.localeCompare(b.name));
+  const medals = ["🥇","🥈","🥉"];
+  app.innerHTML = `
+    <button class="back" onclick="actions.closeRecap()">‹ Back</button>
+    <div style="margin:6px 4px 16px;text-align:center;">
+      <h2 class="logo" style="font-size:28px;margin:0;">🌅 Morning After</h2>
+      <div class="night-meta">${esc(n.name)} · ${dateLabel(n.date)}</div>
+    </div>
+    ${people.slice(0,3).map((p,i)=>`
+      <div class="person" style="${i===0 ? 'border-color:var(--amber);' : ''}">
+        <div class="person-inner">
+          <span style="font-size:26px;width:36px;text-align:center;">${medals[i]}</span>
+          <span class="pname">${esc(p.name)}</span>
+          <span class="pcount">${countOf(p)}</span>
+        </div>
+      </div>`).join("")}
+    ${people.length>3 ? `
+      <div class="card" style="padding:8px 16px;margin-bottom:10px;">
+        ${people.slice(3).map((p,i)=>`
+          <div style="display:flex;justify-content:space-between;padding:7px 0;">
+            <span><span style="color:var(--muted);">${i+4}.</span> ${esc(p.name)}</span>
+            <span style="color:var(--amber);font-family:'Lilita One',system-ui;">${countOf(p)}</span>
+          </div>`).join("")}
+      </div>` : ""}
+    <h2 class="section">📽️ Relive the night</h2>
+    ${people.filter(p=>countOf(p)>0).map(p=>{
+      const pos = people.indexOf(p)+1;
+      return `
+      <button class="night-row" onclick="actions.playSlideshow('${nid}','${p.id}')">
+        <span>
+          <span class="night-name">${esc(p.name)}</span>
+          <span class="night-meta" style="display:block;">${pos}${posSuffix(pos)} place · ${countOf(p)} photos</span>
+        </span>
+        <span style="color:var(--amber);font-size:20px;">▶</span>
+      </button>`;
+    }).join("")}
+    <p class="hint" style="text-align:center;">Tap a name to watch their photo slideshow — use the buttons under any photo in a gallery to download or share it.</p>`;
+}
+
+async function startSlideshow(nid, pid){
+  const n = data.nights[nid]; const p = n?.people?.[pid];
+  if (!p) return;
+  statusEl.textContent = "loading photos…";
+  await loadGalleryPhotos(pid, nid);
+  statusEl.textContent = "room " + roomCode;
+  const shots = drinksOf(p).filter(([id])=>photoCache[id]);
+  if (!shots.length) { toast("No photos found for " + p.name); return; }
+  const standings = Object.values(n.people || {}).sort((a,b)=>countOf(b)-countOf(a));
+  const pos = standings.findIndex(x=>x.id===pid) + 1;
+
+  let i = 0;
+  const m = document.createElement("div");
+  m.className = "modal";
+  m.style.flexDirection = "column";
+  m.innerHTML = `
+    <img id="ssImg" alt="Slideshow photo">
+    <div id="ssCap" style="color:var(--foam);margin-top:12px;font-family:'Lilita One',system-ui;font-size:17px;text-align:center;padding:0 16px;"></div>
+    <div id="ssSub" style="color:var(--muted);font-size:13px;margin-top:6px;"></div>
+    <div style="color:var(--muted);font-size:12px;margin-top:10px;">tap anywhere to close</div>`;
+  const img = m.querySelector("#ssImg"), cap = m.querySelector("#ssCap"), sub = m.querySelector("#ssSub");
+  const show = ()=>{
+    const [id, d] = shots[i];
+    img.src = photoCache[id];
+    cap.textContent = `${p.name} — ${pos}${posSuffix(pos)} place · ${countOf(p)} drinks 🍺`;
+    sub.textContent = `photo ${i+1} of ${shots.length} · ${timeLabel(d.ts)}`;
+  };
+  show();
+  const t = setInterval(()=>{ i = (i+1) % shots.length; show(); }, 2500);
+  m.onclick = ()=>{ clearInterval(t); m.remove(); };
+  document.body.appendChild(m);
+}
+
+// ---------- beer QR invite (4 styles) ----------
+const QR_STYLES = [
+  { id:"mug",     label:"🍺 Mug" },
+  { id:"stout",   label:"🖤 Stout" },
+  { id:"bottle",  label:"🍾 Bottle" },
+  { id:"coaster", label:"🟡 Coaster" },
+];
+
+function renderInvite(){
+  const style = localStorage.getItem("beernight-qrstyle") || "mug";
+  app.innerHTML = `
+    <button class="back" onclick="actions.closeInvite()">‹ Back</button>
+    <div style="margin:6px 4px 12px;">
+      <h2 class="logo" style="font-size:24px;margin:0;">Invite the crew</h2>
+      <div class="night-meta">Scan to join room ${esc(roomCode)} — camera app, no typing.</div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:12px;">
+      ${QR_STYLES.map(s=>`
+        <button class="room-pill" style="${s.id===style ? 'background:var(--amber);color:#241300;border-color:var(--amber);font-weight:700;' : ''}"
+                onclick="actions.setQRStyle('${s.id}')">${s.label}</button>`).join("")}
+    </div>
+    <div class="card" style="text-align:center;">
+      <canvas id="qrCanvas" style="max-width:100%;height:auto;border-radius:16px;"></canvas>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;justify-content:center;">
+      <button class="btn" onclick="actions.downloadQR()">Save as image</button>
+    </div>
+    <p class="hint" style="text-align:center;">Save it for the group chat, print the coaster for the table, or hold your phone up. Anyone who scans lands straight in this room.</p>`;
+  const url = location.origin + location.pathname + "?room=" + encodeURIComponent(roomCode);
+  try { QR_DRAWERS[style](document.getElementById("qrCanvas"), url); }
+  catch(e){ showError("Couldn't draw the QR — check your connection (QR library loads from the web)."); }
+}
+
+// ----- shared QR drawing engine -----
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+const inFinder = (r,c,N) => (r<7&&c<7) || (r<7&&c>=N-7) || (r>=N-7&&c<7);
+
+function drawFinder(ctx,x,y,cell,dark,light){
+  ctx.fillStyle=dark; roundRect(ctx,x,y,7*cell,7*cell,cell*2.2); ctx.fill();
+  ctx.fillStyle=light; roundRect(ctx,x+cell,y+cell,5*cell,5*cell,cell*1.5); ctx.fill();
+  ctx.fillStyle=dark; roundRect(ctx,x+2*cell,y+2*cell,3*cell,3*cell,cell); ctx.fill();
+}
+
+function makeQRData(text){
+  const qr = qrcode(0, "H");   // 30% error correction — survives the centre logo
+  qr.addData(text); qr.make();
+  return qr;
+}
+
+function drawModules(ctx,qr,ox,oy,cell,dark,light,shape){
+  const N = qr.getModuleCount();
+  ctx.fillStyle = dark;
+  for (let r=0;r<N;r++) for (let c=0;c<N;c++){
+    if (!qr.isDark(r,c) || inFinder(r,c,N)) continue;
+    if (shape === "square") {
+      roundRect(ctx, ox+c*cell+cell*0.08, oy+r*cell+cell*0.08, cell*0.84, cell*0.84, cell*0.22);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(ox+c*cell+cell/2, oy+r*cell+cell/2, cell*0.43, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+  drawFinder(ctx, ox, oy, cell, dark, light);
+  drawFinder(ctx, ox+(N-7)*cell, oy, cell, dark, light);
+  drawFinder(ctx, ox, oy+(N-7)*cell, cell, dark, light);
+}
+
+function centerLogo(ctx,qr,ox,oy,cell,plateColor,dark){
+  const N=qr.getModuleCount(), qrSize=N*cell, plate=cell*9;
+  roundRect(ctx, ox+qrSize/2-plate/2, oy+qrSize/2-plate/2, plate, plate, 16);
+  ctx.fillStyle=plateColor; ctx.fill();
+  ctx.strokeStyle=dark; ctx.lineWidth=3;
+  roundRect(ctx, ox+qrSize/2-plate/2+4, oy+qrSize/2-plate/2+4, plate-8, plate-8, 12);
+  ctx.stroke();
+  const cx0=ox+qrSize/2, cy0=oy+qrSize/2;
+  ctx.fillStyle="#F2A81D"; roundRect(ctx,cx0-16,cy0-12,32,30,6); ctx.fill();
+  ctx.fillStyle="#FFFFFF"; roundRect(ctx,cx0-16,cy0-21,32,12,5); ctx.fill();
+}
+
+// ----- style 1: foamy mug -----
+function drawMugQR(canvas, text){
+  const qr=makeQRData(text), N=qr.getModuleCount();
+  const cell=10, qrSize=N*cell, quiet=4*cell, wall=22, foamH=74, handle=58;
+  const gw=qrSize+quiet*2+wall*2, gh=qrSize+quiet*2+wall*2+14;
+  const W=gw+handle+24, Hh=gh+foamH+56;
+  canvas.width=W; canvas.height=Hh;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle="#17100A"; ctx.fillRect(0,0,W,Hh);
+  const gx=12, gy=foamH;
+  ctx.strokeStyle="#F7EFDD"; ctx.lineWidth=16;
+  ctx.beginPath(); ctx.arc(gx+gw, gy+gh*0.46, gh*0.26, -Math.PI/2, Math.PI/2); ctx.stroke();
+  roundRect(ctx,gx,gy,gw,gh,26); ctx.fillStyle="#F7EFDD"; ctx.fill();
+  roundRect(ctx,gx+10,gy+10,gw-20,gh-20,18); ctx.fillStyle="#FBEED3"; ctx.fill();
+  const ox=gx+(gw-qrSize)/2, oy=gy+(gh-qrSize)/2+4;
+  drawModules(ctx,qr,ox,oy,cell,"#2A1607","#FBEED3","dot");
+  centerLogo(ctx,qr,ox,oy,cell,"#F7EFDD","#2A1607");
+  ctx.fillStyle="#FFFFFF";
+  const blobs=9;
+  for(let i=0;i<=blobs;i++){
+    const bx=gx+(gw/blobs)*i, r=20+((i*37)%15);
+    ctx.beginPath(); ctx.arc(bx,gy+2,r,0,Math.PI*2); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(gx+gw*0.2, gy+38, 11, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(gx+gw*0.72, gy+30, 8, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle="#F2A81D";
+  [[W-26,gy+gh*0.2,5],[W-16,gy+gh*0.32,3],[W-30,gy+gh*0.44,4]].forEach(([bx,by,r])=>{
+    ctx.beginPath(); ctx.arc(bx,by,r,0,Math.PI*2); ctx.fill();
+  });
+  ctx.fillStyle="#F2A81D"; ctx.font="bold 26px 'Lilita One', system-ui"; ctx.textAlign="center";
+  ctx.fillText("ROOM "+roomCode+"  \u00B7  BEER NIGHT", gx+gw/2, gy+gh+38);
+}
+
+// ----- style 2: stout pint -----
+function drawStoutQR(canvas, text){
+  const qr=makeQRData(text), N=qr.getModuleCount();
+  const cell=10, qrSize=N*cell, quiet=4*cell;
+  const label=qrSize+quiet*2;
+  const gw=label+80, gh=label+230;
+  const W=gw+80, Hh=gh+150;
+  canvas.width=W; canvas.height=Hh;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle="#F7EFDD"; ctx.fillRect(0,0,W,Hh);
+  const gx=(W-gw)/2, gy=90;
+  ctx.fillStyle="#21150B";
+  ctx.beginPath();
+  ctx.moveTo(gx+18,gy);
+  ctx.lineTo(gx+gw-18,gy);
+  ctx.bezierCurveTo(gx+gw+14,gy+gh*0.35, gx+gw-30,gy+gh*0.6, gx+gw-22,gy+gh-16);
+  ctx.arcTo(gx+gw-22,gy+gh,gx+22,gy+gh,18);
+  ctx.arcTo(gx+22,gy+gh,gx+22,gy+gh-16,18);
+  ctx.bezierCurveTo(gx+30,gy+gh*0.6, gx-14,gy+gh*0.35, gx+18,gy);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle="#FFF7E6";
+  roundRect(ctx,gx+10,gy-58,gw-20,74,26); ctx.fill();
+  ctx.strokeStyle="#EFE2C8"; ctx.lineWidth=3;
+  for(let i=1;i<4;i++){ctx.beginPath();ctx.moveTo(gx+26,gy-58+i*17);ctx.lineTo(gx+gw-26,gy-58+i*17);ctx.stroke();}
+  const lx=(W-label)/2, ly=gy+70;
+  roundRect(ctx,lx,ly,label,label,22); ctx.fillStyle="#FBEED3"; ctx.fill();
+  ctx.strokeStyle="#F2A81D"; ctx.lineWidth=5;
+  roundRect(ctx,lx+8,ly+8,label-16,label-16,16); ctx.stroke();
+  drawModules(ctx,qr,lx+quiet,ly+quiet,cell,"#21150B","#FBEED3","square");
+  centerLogo(ctx,qr,lx+quiet,ly+quiet,cell,"#FBEED3","#21150B");
+  ctx.fillStyle="#F2A81D"; ctx.font="bold 26px 'Lilita One', system-ui"; ctx.textAlign="center";
+  ctx.fillText("BEER NIGHT", W/2, ly+label+46);
+  ctx.fillStyle="#21150B"; ctx.font="bold 22px 'Lilita One', system-ui";
+  ctx.fillText("ROOM "+roomCode, W/2, ly+label+76);
+  ctx.fillStyle="#9C8467"; ctx.font="16px system-ui";
+  ctx.fillText("scan to join", W/2, gy+gh+40);
+}
+
+// ----- style 3: bottle -----
+function drawBottleQR(canvas, text){
+  const qr=makeQRData(text), N=qr.getModuleCount();
+  const cell=9, qrSize=N*cell, quiet=4*cell;
+  const label=qrSize+quiet*2;
+  const bodyW=label+56, W=bodyW+140, Hh=label+560;
+  canvas.width=W; canvas.height=Hh;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle="#17100A"; ctx.fillRect(0,0,W,Hh);
+  const bx=(W-bodyW)/2;
+  const neckW=86, nx=(W-neckW)/2;
+  const capY=36, neckY=capY+38, shoulderY=neckY+150, bodyY=shoulderY+70, bodyH=label+220;
+  ctx.fillStyle="#4A2A12";
+  roundRect(ctx,bx,bodyY,bodyW,bodyH,34); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(nx,neckY+40);
+  ctx.lineTo(nx,shoulderY-40);
+  ctx.bezierCurveTo(nx-10,shoulderY+30, bx,shoulderY+10, bx+4,bodyY+30);
+  ctx.lineTo(bx+bodyW-4,bodyY+30);
+  ctx.bezierCurveTo(bx+bodyW,shoulderY+10, nx+neckW+10,shoulderY+30, nx+neckW,shoulderY-40);
+  ctx.lineTo(nx+neckW,neckY+40);
+  ctx.closePath(); ctx.fill();
+  roundRect(ctx,nx,neckY,neckW,90,14); ctx.fill();
+  ctx.fillStyle="#5E3A1C";
+  roundRect(ctx,bx+16,bodyY+26,18,bodyH-60,9); ctx.fill();
+  ctx.fillStyle="#F2A81D";
+  roundRect(ctx,nx-8,capY,neckW+16,34,10); ctx.fill();
+  ctx.fillStyle="#C97E12";
+  for(let i=0;i<8;i++){ctx.beginPath();ctx.arc(nx+(neckW/7)*i, capY+34, 6, 0, Math.PI, false);ctx.fill();}
+  ctx.fillStyle="#F2A81D";
+  roundRect(ctx,nx-14,neckY+52,neckW+28,30,8); ctx.fill();
+  ctx.fillStyle="#241300"; ctx.font="bold 16px 'Lilita One', system-ui"; ctx.textAlign="center";
+  ctx.fillText("BEER NIGHT", W/2, neckY+73);
+  const lx=(W-label)/2, ly=bodyY+62;
+  roundRect(ctx,lx,ly,label,label+66,20); ctx.fillStyle="#FBEED3"; ctx.fill();
+  ctx.strokeStyle="#C97E12"; ctx.lineWidth=4;
+  roundRect(ctx,lx+7,ly+7,label-14,label+66-14,14); ctx.stroke();
+  drawModules(ctx,qr,lx+quiet,ly+quiet-6,cell,"#241300","#FBEED3","dot");
+  centerLogo(ctx,qr,lx+quiet,ly+quiet-6,cell,"#FBEED3","#241300");
+  ctx.fillStyle="#241300"; ctx.font="bold 24px 'Lilita One', system-ui";
+  ctx.fillText("ROOM "+roomCode, W/2, ly+label+40);
+  ctx.fillStyle="#9C8467"; ctx.font="15px system-ui";
+  ctx.fillText("scan to join the leaderboard", W/2, bodyY+bodyH+40);
+}
+
+// ----- style 4: coaster -----
+function drawCoasterQR(canvas, text){
+  const qr=makeQRData(text), N=qr.getModuleCount();
+  const cell=10, qrSize=N*cell, quiet=4*cell;
+  const inner=qrSize+quiet*2;
+  const R=Math.ceil(Math.sqrt(2)*inner/2)+58;
+  const W=R*2+40, Hh=R*2+40;
+  canvas.width=W; canvas.height=Hh;
+  const ctx=canvas.getContext("2d");
+  ctx.fillStyle="#17100A"; ctx.fillRect(0,0,W,Hh);
+  const cx=W/2, cy=Hh/2;
+  ctx.fillStyle="#F7EFDD";
+  const scallops=36;
+  for(let i=0;i<scallops;i++){
+    const a=(i/scallops)*Math.PI*2;
+    ctx.beginPath(); ctx.arc(cx+Math.cos(a)*R, cy+Math.sin(a)*R, 16, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle="#F2A81D"; ctx.lineWidth=8;
+  ctx.beginPath(); ctx.arc(cx,cy,R-24,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle="#C97E12"; ctx.font="bold 24px 'Lilita One', system-ui";
+  const arcText=(str,radius,start,dir)=>{
+    const step=0.115*dir;
+    let a=start;
+    for(const ch of str){
+      ctx.save(); ctx.translate(cx+Math.cos(a)*radius, cy+Math.sin(a)*radius);
+      ctx.rotate(a+(dir>0?Math.PI/2:-Math.PI/2));
+      ctx.textAlign="center"; ctx.fillText(ch,0,0); ctx.restore();
+      a+=step;
+    }
+  };
+  arcText("BEER NIGHT", R-52, -Math.PI/2-0.52, 1);
+  arcText("ROOM "+roomCode, R-52, Math.PI/2+0.58, -1);
+  ctx.fillStyle="#F2A81D";
+  [[cx-(R-52),cy],[cx+(R-52),cy]].forEach(([px,py])=>{
+    ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);ctx.fill();
+  });
+  const ox=cx-qrSize/2, oy=cy-qrSize/2;
+  drawModules(ctx,qr,ox,oy,cell,"#2A1607","#F7EFDD","dot");
+  centerLogo(ctx,qr,ox,oy,cell,"#F7EFDD","#2A1607");
+}
+
+const QR_DRAWERS = { mug:drawMugQR, stout:drawStoutQR, bottle:drawBottleQR, coaster:drawCoasterQR };
+
+function renderNight(n){
+  // gallery sub-view
+  if (view.galleryPid) {
+    const p = n.people?.[view.galleryPid];
+    if (!p) { view.galleryPid = null; }
+    else {
+      const drinks = drinksOf(p).reverse();
+      app.innerHTML = `
+        <button class="back" onclick="actions.closeGallery()">‹ Back to leaderboard</button>
+        <div style="margin:6px 4px 4px;">
+          <h2 class="logo" style="font-size:24px;margin:0;">${esc(p.name)}'s night 📸</h2>
+          <div class="night-meta">${countOf(p)} drinks · ${esc(n.name)}</div>
+        </div>
+        ${drinks.length===0 ? `<div class="card muted-center" style="margin-top:12px;">No drinks logged yet.</div>` : `
+        <div class="gallery">
+          ${drinks.map(([id,d])=>`
+            <div class="shot" onclick="actions.viewPhoto('${id}')">
+              ${photoCache[id]
+                ? `<img src="${photoCache[id]}" alt="Drink proof at ${timeLabel(d.ts)}">`
+                : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">loading…</div>`}
+              <div class="ts">${timeLabel(d.ts)}</div>
+            </div>`).join("")}
+        </div>`}`;
+      return;
+    }
+  }
+
+  const people = Object.values(n.people || {}).sort((a,b)=> countOf(b)-countOf(a) || a.name.localeCompare(b.name));
+  const max = Math.max(1, ...people.map(countOf));
+
+  app.innerHTML = `
+    <button class="back" onclick="actions.goHome()">‹ All nights</button>
+    <div style="margin:6px 4px 14px;">
+      <h2 class="logo" style="font-size:26px;margin:0;">${esc(n.name)}</h2>
+      <div class="night-meta">${dateLabel(n.date)}${n.ended ? " · finished" : ""} · 📸 photo + 3 min rule in force</div>
+    </div>
+    ${n.ended ? "" : `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="row">
+        <input id="personName" placeholder="Add a friend…" maxlength="24">
+        <button class="btn" onclick="actions.addPerson()">Add</button>
+      </div>
+    </div>`}
+    ${people.length===0 ? `<div class="card muted-center">Add your friends above — first sip starts the race.</div>` : ""}
+    ${people.map((p,i)=>{
+      const c = countOf(p);
+      const pct = c===0 ? 0 : Math.max(8,(c/max)*100);
+      const crown = i===0 && c>0;
+      const left = cooldownLeft(p);
+      return `
+      <div class="person">
+        <div class="fill" style="width:${pct}%;${pct===0?'border-right:none;':''}" aria-hidden="true"></div>
+        <div class="person-inner">
+          <span class="rank">${crown ? '👑' : i+1}</span>
+          <span class="pname">${esc(p.name)}</span>
+          <span class="pcount">${c}</span>
+          <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')">📸</button>
+          ${n.ended ? "" : `
+          <button class="plus ${left>0?'cooling':''}" data-cd="${p.id}" ${left>0?'disabled':''}
+                  aria-label="Add a drink for ${esc(p.name)} — photo required"
+                  onclick="actions.requestDrink('${p.id}')">${left>0 ? fmtLeft(left) : "📷 +1"}</button>
+          <button class="x" aria-label="Undo ${esc(p.name)}'s last drink" onclick="actions.undoDrink('${p.id}')">↺</button>`}
+        </div>
+      </div>`;
+    }).join("")}
+    <div style="display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;">
+      ${n.ended ? `<button class="ghost" style="border-color:var(--amber);color:var(--amber);" onclick="actions.openRecap('${n.id}')">🌅 Recap &amp; slideshows</button>` : ""}
+      <button class="ghost" onclick="actions.showInvite()">🍺 Invite QR</button>
+      <button class="ghost" onclick="actions.toggleEnded()">${n.ended ? "Reopen night" : "End night"}</button>
+      <button class="ghost danger" onclick="actions.deleteNight()">Delete</button>
+    </div>
+    <p class="hint">Every point needs a photo with your drink — tap 📷 +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Tap 📸 to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
+
+  const pi = $("#personName");
+  if (pi) pi.onkeydown = (e)=> e.key==="Enter" && actions.addPerson();
+
+  // live countdowns on cooling buttons
+  tick = setInterval(()=>{
+    let anyCooling = false;
+    for (const p of people) {
+      const btn = document.querySelector(`[data-cd="${p.id}"]`);
+      if (!btn) continue;
+      const left = cooldownLeft(p);
+      if (left > 0) {
+        anyCooling = true;
+        btn.textContent = fmtLeft(left);
+        btn.disabled = true; btn.classList.add("cooling");
+      } else if (btn.disabled) {
+        btn.textContent = "📷 +1";
+        btn.disabled = false; btn.classList.remove("cooling");
+      }
+    }
+    if (!anyCooling) clearInterval(tick);
+  }, 1000);
+}
+</script>
+</body>
+</html>

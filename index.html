@@ -342,7 +342,7 @@ camInput.addEventListener("change", async ()=>{
   pendingPhoto = null;
   const n = data.nights[view.nightId];
   const p = n?.people?.[pid];
-  if (!n || !p || n.ended) return;
+  if (!n || !p || n.ended || p.out) return;
 
   // re-check cooldown at submission time (photo can't be pre-taken to skip it)
   const last = latestDrinkTs(p);
@@ -404,9 +404,17 @@ window.actions = {
     n.people[id] = { id, name, drinks:{} };
     saveData(); render();
   },
+  toggleOut(pid){
+    const n = data.nights[view.nightId]; if(!n || n.ended) return;
+    const p = n.people?.[pid]; if(!p) return;
+    p.out = !p.out;
+    saveData(); render();
+    toast(p.out ? `🏳️ ${p.name} taps out — score locked at ${countOf(p)}` : `🍺 ${p.name} is back in!`);
+  },
   requestDrink(pid){
     const n = data.nights[view.nightId]; if(!n || n.ended) return;
     const p = n.people?.[pid]; if(!p) return;
+    if (p.out) { toast(`🏳️ ${p.name} has tapped out`); return; }
     if (cooldownLeft(p) > 0) { toast("⏳ Too soon — pace yourself!"); return; }
     pendingPhoto = { pid };
     camInput.click(); // opens camera — photo required to earn the point
@@ -436,6 +444,7 @@ window.actions = {
   },
   toggleEnded(){
     const n = data.nights[view.nightId]; if(!n) return;
+    if (!n.ended && !confirm("Are you sure you're done? This ends the night for EVERYONE in the room and locks the leaderboard.\n\nIf it's just you bailing, simply stop counting — the others can keep playing without you.")) return;
     n.ended = !n.ended;
     saveData(); render();
   },
@@ -735,6 +744,17 @@ function roundRect(ctx,x,y,w,h,r){
 }
 const inFinder = (r,c,N) => (r<7&&c<7) || (r<7&&c>=N-7) || (r>=N-7&&c<7);
 
+function fitFont(ctx, txt, maxWidth, startPx, minPx, family){
+  let size = startPx;
+  while (size > minPx) {
+    ctx.font = `${size}px ${family}`;
+    if (ctx.measureText(txt).width <= maxWidth) break;
+    size--;
+  }
+  ctx.font = `${size}px ${family}`;
+}
+const displayUrl = (text) => text.replace(/^https?:\/\//, "");
+
 function drawFinder(ctx,x,y,cell,dark,light){
   ctx.fillStyle=dark; roundRect(ctx,x,y,7*cell,7*cell,cell*2.2); ctx.fill();
   ctx.fillStyle=light; roundRect(ctx,x+cell,y+cell,5*cell,5*cell,cell*1.5); ctx.fill();
@@ -783,7 +803,7 @@ function drawMugQR(canvas, text){
   const qr=makeQRData(text), N=qr.getModuleCount();
   const cell=10, qrSize=N*cell, quiet=4*cell, wall=22, foamH=74, handle=58;
   const gw=qrSize+quiet*2+wall*2, gh=qrSize+quiet*2+wall*2+14;
-  const W=gw+handle+24, Hh=gh+foamH+56;
+  const W=gw+handle+24, Hh=gh+foamH+88;
   canvas.width=W; canvas.height=Hh;
   const ctx=canvas.getContext("2d");
   ctx.fillStyle="#17100A"; ctx.fillRect(0,0,W,Hh);
@@ -809,6 +829,9 @@ function drawMugQR(canvas, text){
   });
   ctx.fillStyle="#F2A81D"; ctx.font="bold 26px 'Lilita One', system-ui"; ctx.textAlign="center";
   ctx.fillText("ROOM "+roomCode+"  \u00B7  BEER NIGHT", gx+gw/2, gy+gh+38);
+  ctx.fillStyle="#9C8467";
+  fitFont(ctx, displayUrl(text), gw-16, 17, 10, "system-ui");
+  ctx.fillText(displayUrl(text), gx+gw/2, gy+gh+66);
 }
 
 // ----- style 2: stout pint -----
@@ -817,7 +840,7 @@ function drawStoutQR(canvas, text){
   const cell=10, qrSize=N*cell, quiet=4*cell;
   const label=qrSize+quiet*2;
   const gw=label+80, gh=label+230;
-  const W=gw+80, Hh=gh+150;
+  const W=gw+80, Hh=gh+184;
   canvas.width=W; canvas.height=Hh;
   const ctx=canvas.getContext("2d");
   ctx.fillStyle="#F7EFDD"; ctx.fillRect(0,0,W,Hh);
@@ -847,6 +870,9 @@ function drawStoutQR(canvas, text){
   ctx.fillText("ROOM "+roomCode, W/2, ly+label+76);
   ctx.fillStyle="#9C8467"; ctx.font="16px system-ui";
   ctx.fillText("scan to join", W/2, gy+gh+40);
+  ctx.fillStyle="#C97E12";
+  fitFont(ctx, displayUrl(text), gw-24, 17, 10, "system-ui");
+  ctx.fillText(displayUrl(text), W/2, gy+gh+68);
 }
 
 // ----- style 3: bottle -----
@@ -854,7 +880,7 @@ function drawBottleQR(canvas, text){
   const qr=makeQRData(text), N=qr.getModuleCount();
   const cell=9, qrSize=N*cell, quiet=4*cell;
   const label=qrSize+quiet*2;
-  const bodyW=label+56, W=bodyW+140, Hh=label+560;
+  const bodyW=label+56, W=bodyW+140, Hh=label+592;
   canvas.width=W; canvas.height=Hh;
   const ctx=canvas.getContext("2d");
   ctx.fillStyle="#17100A"; ctx.fillRect(0,0,W,Hh);
@@ -892,6 +918,9 @@ function drawBottleQR(canvas, text){
   ctx.fillText("ROOM "+roomCode, W/2, ly+label+40);
   ctx.fillStyle="#9C8467"; ctx.font="15px system-ui";
   ctx.fillText("scan to join the leaderboard", W/2, bodyY+bodyH+40);
+  ctx.fillStyle="#F2A81D";
+  fitFont(ctx, displayUrl(text), W-40, 17, 10, "system-ui");
+  ctx.fillText(displayUrl(text), W/2, bodyY+bodyH+68);
 }
 
 // ----- style 4: coaster -----
@@ -900,11 +929,11 @@ function drawCoasterQR(canvas, text){
   const cell=10, qrSize=N*cell, quiet=4*cell;
   const inner=qrSize+quiet*2;
   const R=Math.ceil(Math.sqrt(2)*inner/2)+58;
-  const W=R*2+40, Hh=R*2+40;
+  const W=R*2+40, Hh=R*2+84;
   canvas.width=W; canvas.height=Hh;
   const ctx=canvas.getContext("2d");
   ctx.fillStyle="#17100A"; ctx.fillRect(0,0,W,Hh);
-  const cx=W/2, cy=Hh/2;
+  const cx=W/2, cy=R+20;
   ctx.fillStyle="#F7EFDD";
   const scallops=36;
   for(let i=0;i<scallops;i++){
@@ -934,6 +963,9 @@ function drawCoasterQR(canvas, text){
   const ox=cx-qrSize/2, oy=cy-qrSize/2;
   drawModules(ctx,qr,ox,oy,cell,"#2A1607","#F7EFDD","dot");
   centerLogo(ctx,qr,ox,oy,cell,"#F7EFDD","#2A1607");
+  ctx.fillStyle="#F2A81D"; ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+  fitFont(ctx, displayUrl(text), W-36, 18, 10, "system-ui");
+  ctx.fillText(displayUrl(text), cx, R*2+62);
 }
 
 const QR_DRAWERS = { mug:drawMugQR, stout:drawStoutQR, bottle:drawBottleQR, coaster:drawCoasterQR };
@@ -988,14 +1020,19 @@ function renderNight(n){
       const crown = i===0 && c>0;
       const left = cooldownLeft(p);
       return `
-      <div class="person">
+      <div class="person" style="${p.out ? 'opacity:.55;' : ''}">
         <div class="fill" style="width:${pct}%;${pct===0?'border-right:none;':''}" aria-hidden="true"></div>
         <div class="person-inner">
           <span class="rank">${crown ? '👑' : i+1}</span>
-          <span class="pname">${esc(p.name)}</span>
+          <span class="pname">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
           <span class="pcount">${c}</span>
           <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')">📸</button>
-          ${n.ended ? "" : `
+          ${n.ended ? "" : p.out ? `
+          <button class="plus cooling" style="min-width:112px;font-family:'Lilita One',system-ui;font-size:15px;"
+                  aria-label="${esc(p.name)} rejoins the night"
+                  onclick="actions.toggleOut('${p.id}')">🍺 I'm back</button>` : `
+          <button class="x" style="font-size:15px;" aria-label="${esc(p.name)} taps out for the night"
+                  onclick="actions.toggleOut('${p.id}')">🏳️</button>
           <button class="plus ${left>0?'cooling':''}" data-cd="${p.id}" ${left>0?'disabled':''}
                   aria-label="Add a drink for ${esc(p.name)} — photo required"
                   onclick="actions.requestDrink('${p.id}')">${left>0 ? fmtLeft(left) : "📷 +1"}</button>
@@ -1009,7 +1046,7 @@ function renderNight(n){
       <button class="ghost" onclick="actions.toggleEnded()">${n.ended ? "Reopen night" : "End night"}</button>
       <button class="ghost danger" onclick="actions.deleteNight()">Delete</button>
     </div>
-    <p class="hint">Every point needs a photo with your drink — tap 📷 +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Tap 📸 to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
+    <p class="hint">Every point needs a photo with your drink — tap 📷 +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Heading home early? Tap 🏳️ to bow out with your score locked in — the night carries on without you, and you can tap back in if you rally. Tap 📸 to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
 
   const pi = $("#personName");
   if (pi) pi.onkeydown = (e)=> e.key==="Enter" && actions.addPerson();

@@ -404,6 +404,26 @@ window.actions = {
     n.people[id] = { id, name, drinks:{} };
     saveData(); render();
   },
+  playerMenu(pid){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const p = n.people?.[pid]; if(!p) return;
+    const m = document.createElement("div");
+    m.className = "modal"; m.style.flexDirection = "column";
+    m.innerHTML = `
+      <div class="card" style="min-width:270px;max-width:90vw;text-align:center;">
+        <div style="font-family:'Lilita One',system-ui;font-size:20px;margin-bottom:4px;color:var(--foam);">${esc(p.name)}</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:14px;">${countOf(p)} drinks${p.out ? " · 🏳️ tapped out" : ""}</div>
+        ${n.ended ? "" : `<button class="ghost" id="pmUndo" style="width:100%;margin-bottom:8px;color:var(--foam);">↺ Undo last drink</button>`}
+        <button class="ghost danger" id="pmDel" style="width:100%;margin-bottom:8px;">🗑 Remove from night</button>
+        <button class="btn" id="pmX" style="width:100%;">Cancel</button>
+      </div>`;
+    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    const u = m.querySelector("#pmUndo");
+    if (u) u.onclick = ()=>{ m.remove(); actions.undoDrink(pid); };
+    m.querySelector("#pmDel").onclick = ()=>{ m.remove(); actions.removePerson(pid); };
+    m.querySelector("#pmX").onclick = ()=> m.remove();
+    document.body.appendChild(m);
+  },
   toggleOut(pid){
     const n = data.nights[view.nightId]; if(!n || n.ended) return;
     const p = n.people?.[pid]; if(!p) return;
@@ -1024,7 +1044,9 @@ function renderNight(n){
         <div class="fill" style="width:${pct}%;${pct===0?'border-right:none;':''}" aria-hidden="true"></div>
         <div class="person-inner">
           <span class="rank">${crown ? '👑' : i+1}</span>
-          <span class="pname">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
+          <span class="pname" role="button" style="cursor:pointer;"
+                aria-label="Options for ${esc(p.name)}"
+                onclick="actions.playerMenu('${p.id}')">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
           <span class="pcount">${c}</span>
           <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')">📸</button>
           ${n.ended ? "" : p.out ? `
@@ -1046,7 +1068,7 @@ function renderNight(n){
       <button class="ghost" onclick="actions.toggleEnded()">${n.ended ? "Reopen night" : "End night"}</button>
       <button class="ghost danger" onclick="actions.deleteNight()">Delete</button>
     </div>
-    <p class="hint">Every point needs a photo with your drink — tap 📷 +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Heading home early? Tap 🏳️ to bow out with your score locked in — the night carries on without you, and you can tap back in if you rally. Tap 📸 to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
+    <p class="hint">Every point needs a photo with your drink — tap 📷 +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Made a mistake? ↺ undoes the last drink. Tap a player's <b>name</b> for more options, including removing them from the night. Heading home early? Tap 🏳️ to bow out with your score locked in — you can tap back in if you rally. Tap 📸 to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
 
   const pi = $("#personName");
   if (pi) pi.onkeydown = (e)=> e.key==="Enter" && actions.addPerson();

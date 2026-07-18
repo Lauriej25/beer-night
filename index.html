@@ -58,6 +58,8 @@
   }
   @media (prefers-reduced-motion:reduce){ .fill{transition:none;} }
   .person-inner{position:relative;display:flex;align-items:center;gap:8px;}
+  .avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--edge);flex-shrink:0;}
+  .avatar-ph{width:32px;height:32px;border-radius:50%;border:2px solid var(--edge);background:#130D07;color:var(--muted);display:flex;align-items:center;justify-content:center;font-family:'Lilita One',system-ui;font-size:15px;flex-shrink:0;}
   .rank{width:24px;text-align:center;color:var(--muted);font-size:14px;}
   .pname{flex:1;font-family:'Lilita One',system-ui;font-size:17px;letter-spacing:.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .pcount{color:var(--amber);font-family:'Lilita One',system-ui;font-size:22px;min-width:26px;text-align:right;}
@@ -160,6 +162,7 @@
 <div id="errorBar" class="error" style="display:none;"></div>
 <main class="wrap" id="app"></main>
 <input type="file" id="camInput" accept="image/*" capture="user" style="display:none;">
+<input type="file" id="avInput" accept="image/*" style="display:none;">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
 <script type="module">
@@ -240,13 +243,15 @@ function renderRoomPicker(){
   statusEl.textContent = "";
   app.innerHTML = `
     <div class="card">
-      <h2 class="section" style="margin-top:0;">Join your crew</h2>
-      <p style="color:var(--muted);font-size:14px;margin-top:0;">Pick a room code and share it with your friends — everyone who enters the same code sees the same leaderboard.</p>
+      <h2 class="section" style="margin-top:0;">Create a room</h2>
+      <p style="color:var(--muted);font-size:14px;margin-top:0;">Everyone in the same room shares the same leaderboards.</p>
       <div class="row">
         <input id="roomInput" placeholder="e.g. SCORE1" maxlength="12" autocapitalize="characters">
         <button class="btn" id="roomGo">Go</button>
       </div>
-    </div>`;
+    </div>
+    <h2 class="section">Or join a room</h2>
+    <div id="roomList"><div class="card muted-center">Loading rooms…</div></div>`;
   const input = $("#roomInput");
   const go = () => {
     const code = input.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,"");
@@ -254,7 +259,34 @@ function renderRoomPicker(){
   };
   $("#roomGo").onclick = go;
   input.onkeydown = (e)=> e.key==="Enter" && go();
-  input.focus();
+  loadRoomList();
+}
+
+async function loadRoomList(){
+  const el = document.getElementById("roomList");
+  if (!el) return;
+  try {
+    // shallow=true fetches just the room names — no scores, no photos
+    const res = await fetch(firebaseConfig.databaseURL + "/rooms.json?shallow=true");
+    const obj = await res.json();
+    const codes = obj ? Object.keys(obj).sort() : [];
+    if (!document.getElementById("roomList")) return;   // user navigated away
+    if (!codes.length) {
+      el.innerHTML = `<div class="card muted-center">No rooms yet — create the first one above.</div>`;
+      return;
+    }
+    el.innerHTML = codes.map(c=>{
+      const safe = String(c).replace(/[^A-Za-z0-9]/g,"");
+      return `
+      <button class="night-row" onclick="actions.pickRoom('${safe}')">
+        <span class="night-name">🚪 ${esc(safe)}</span>
+        <span style="color:var(--amber);font-size:20px;">›</span>
+      </button>`;
+    }).join("");
+  } catch(e) {
+    const el2 = document.getElementById("roomList");
+    if (el2) el2.innerHTML = `<div class="card muted-center">Couldn't load rooms — check your connection, or type a code above.</div>`;
+  }
 }
 
 function joinRoom(code){
@@ -290,25 +322,73 @@ async function saveData(){
 }
 
 // ---------- photo helpers ----------
-function compressImage(file){
+function compressImage(file, maxDim = 400, quality = 0.55){
   return new Promise((resolve, reject)=>{
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = ()=>{
       URL.revokeObjectURL(url);
-      const MAX = 400;
       let {width:w, height:h} = img;
-      const scale = Math.min(1, MAX / Math.max(w,h));
+      const scale = Math.min(1, maxDim / Math.max(w,h));
       w = Math.round(w*scale); h = Math.round(h*scale);
       const cv = document.createElement("canvas");
       cv.width = w; cv.height = h;
       cv.getContext("2d").drawImage(img, 0, 0, w, h);
-      resolve(cv.toDataURL("image/jpeg", 0.55)); // ~15–30 KB
+      resolve(cv.toDataURL("image/jpeg", quality));
     };
     img.onerror = reject;
     img.src = url;
   });
 }
+
+// ----- avatar upload (separate input so people can pick from their gallery too) -----
+const avInput = document.getElementById("avInput");
+let pendingAvatar = null;   // pid awaiting an avatar photo
+avInput.addEventListener("change", async ()=>{
+  const file = avInput.files[0];
+  avInput.value = "";
+  const pid = pendingAvatar; pendingAvatar = null;
+  if (!file || !pid) return;
+  const n = data.nights[view.nightId];
+  const p = n?.people?.[pid];
+  if (!p) return;
+  try{
+    statusEl.textContent = "uploading photo…";
+    const b64 = await compressImage(file, 240, 0.6);   // ~8–12 KB avatar
+    const newId = "av_" + uid();
+    await set(ref(db, `rooms/${roomCode}/photos/${newId}`), b64);
+    if (p.avatar) {
+      try{ await remove(ref(db, `rooms/${roomCode}/photos/${p.avatar}`)); }catch(e){}
+      delete photoCache[p.avatar];
+    }
+    p.avatar = newId;
+    photoCache[newId] = b64;
+    await saveData();
+    toast(`📷 Photo set for ${p.name}`);
+  }catch(e){
+    showError("Photo upload failed — try again.");
+    statusEl.textContent = "room " + roomCode;
+  }
+});
+
+// fetch any avatars we haven't cached yet, then refresh once they're in
+const avatarFetching = new Set();
+function ensureAvatars(people){
+  const missing = people.filter(p => p.avatar && !photoCache[p.avatar] && !avatarFetching.has(p.avatar));
+  if (!missing.length) return;
+  missing.forEach(p => avatarFetching.add(p.avatar));
+  Promise.all(missing.map(async (p)=>{
+    try{
+      const snap = await get(ref(db, `rooms/${roomCode}/photos/${p.avatar}`));
+      if (snap.exists()) photoCache[p.avatar] = snap.val();
+    }catch(e){}
+    finally{ avatarFetching.delete(p.avatar); }
+  })).then(()=> render());
+}
+const avatarHtml = (p) => p.avatar && photoCache[p.avatar]
+  ? `<img class="avatar" src="${photoCache[p.avatar]}" alt="">`
+  : `<span class="avatar-ph">${esc((p.name||"?").charAt(0).toUpperCase())}</span>`;
+
 
 function downloadDataUrl(dataUrl, name){
   const a = document.createElement("a");
@@ -447,6 +527,7 @@ window.actions = {
     n.people[id] = { id, name, drinks:{} };
     saveData(); render();
   },
+  pickRoom(code){ joinRoom(code); },
   playerMenu(pid){
     const n = data.nights[view.nightId]; if(!n) return;
     const p = n.people?.[pid]; if(!p) return;
@@ -457,6 +538,7 @@ window.actions = {
         <div style="font-family:'Lilita One',system-ui;font-size:20px;margin-bottom:4px;color:var(--foam);">${esc(p.name)}</div>
         <div style="color:var(--muted);font-size:13px;margin-bottom:14px;">${countOf(p)} drinks${p.out ? " · 🏳️ tapped out" : ""}</div>
         ${n.ended ? "" : `<button class="ghost" id="pmUndo" style="width:100%;margin-bottom:8px;color:var(--foam);">↺ Undo last drink</button>`}
+        <button class="ghost" id="pmAv" style="width:100%;margin-bottom:8px;color:var(--foam);">📷 Set photo</button>
         <button class="ghost" id="pmRen" style="width:100%;margin-bottom:8px;color:var(--foam);">✏️ Rename</button>
         <button class="ghost danger" id="pmDel" style="width:100%;margin-bottom:8px;">🗑 Remove from night</button>
         <button class="btn" id="pmX" style="width:100%;">Cancel</button>
@@ -464,6 +546,7 @@ window.actions = {
     m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
     const u = m.querySelector("#pmUndo");
     if (u) u.onclick = ()=>{ m.remove(); actions.undoDrink(pid); };
+    m.querySelector("#pmAv").onclick = ()=>{ m.remove(); pendingAvatar = pid; avInput.click(); };
     m.querySelector("#pmRen").onclick = ()=>{ m.remove(); actions.renamePerson(pid); };
     m.querySelector("#pmDel").onclick = ()=>{ m.remove(); actions.removePerson(pid); };
     m.querySelector("#pmX").onclick = ()=> m.remove();
@@ -525,6 +608,10 @@ window.actions = {
       remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
       delete photoCache[id];
     }
+    if (p?.avatar) {
+      remove(ref(db, `rooms/${roomCode}/photos/${p.avatar}`)).catch(()=>{});
+      delete photoCache[p.avatar];
+    }
     delete n.people[pid];
     saveData(); render();
   },
@@ -537,11 +624,16 @@ window.actions = {
   deleteNight(){
     const n = data.nights[view.nightId]; if(!n) return;
     if (!confirm("Delete this night (and all its photos) for everyone in the room?")) return;
-    for (const p of Object.values(n.people || {}))
+    for (const p of Object.values(n.people || {})) {
       for (const id of Object.keys(p.drinks || {})) {
         remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
         delete photoCache[id];
       }
+      if (p.avatar) {
+        remove(ref(db, `rooms/${roomCode}/photos/${p.avatar}`)).catch(()=>{});
+        delete photoCache[p.avatar];
+      }
+    }
     delete data.nights[view.nightId];
     view = {page:"home",nightId:null,galleryPid:null};
     saveData(); render();
@@ -714,6 +806,7 @@ function renderRecap(nid){
   const n = data.nights[nid];
   if (!n) { view = { page:"home", nightId:null, galleryPid:null }; return render(); }
   const people = Object.values(n.people || {}).sort((a,b)=> countOf(b)-countOf(a) || a.name.localeCompare(b.name));
+  ensureAvatars(people);
   const medals = ["🥇","🥈","🥉"];
   app.innerHTML = `
     <button class="back" onclick="actions.closeRecap()">‹ Back</button>
@@ -725,6 +818,7 @@ function renderRecap(nid){
       <div class="person" style="${i===0 ? 'border-color:var(--amber);' : ''}">
         <div class="person-inner">
           <span style="font-size:26px;width:36px;text-align:center;">${medals[i]}</span>
+          ${avatarHtml(p)}
           <span class="pname">${esc(p.name)}</span>
           <span class="pcount">${countOf(p)}</span>
         </div>
@@ -1085,6 +1179,7 @@ function renderNight(n){
 
   const people = Object.values(n.people || {}).sort((a,b)=> countOf(b)-countOf(a) || a.name.localeCompare(b.name));
   const max = Math.max(1, ...people.map(countOf));
+  ensureAvatars(people);
 
   app.innerHTML = `
     <button class="back" onclick="actions.goHome()">‹ All nights</button>
@@ -1110,6 +1205,7 @@ function renderNight(n){
         <div class="fill" style="width:${pct}%;${pct===0?'border-right:none;':''}" aria-hidden="true"></div>
         <div class="person-inner">
           <span class="rank">${crown ? '👑' : i+1}</span>
+          ${avatarHtml(p)}
           <span class="pname" role="button" style="cursor:pointer;"
                 aria-label="Options for ${esc(p.name)}"
                 onclick="actions.playerMenu('${p.id}')">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>

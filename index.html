@@ -368,6 +368,49 @@ camInput.addEventListener("change", async ()=>{
   }
 });
 
+// ---------- back-button protection ----------
+// The browser back button navigates WITHIN the app (photo → gallery → night → home).
+// Only when already on the home screen does it ask before actually leaving.
+history.pushState({ bn: 1 }, "");
+window.addEventListener("popstate", ()=>{
+  // if a photo/slideshow/menu overlay is open, back just closes it
+  const modal = document.querySelector(".modal");
+  if (modal) {
+    modal.click();                       // triggers each modal's own close/cleanup
+    if (document.body.contains(modal)) modal.remove();
+    history.pushState({ bn: 1 }, "");
+    return;
+  }
+  if (roomCode && view.page === "night" && view.galleryPid) {
+    view = { ...view, galleryPid: null };
+    render();
+    history.pushState({ bn: 1 }, "");
+  } else if (roomCode && (view.page === "invite" || view.page === "recap")) {
+    view = { page: (view.nightId && data.nights?.[view.nightId]) ? "night" : "home", nightId: view.nightId, galleryPid: null };
+    render();
+    history.pushState({ bn: 1 }, "");
+  } else if (roomCode && view.page === "night") {
+    view = { page: "home", nightId: null, galleryPid: null };
+    render();
+    history.pushState({ bn: 1 }, "");
+  } else {
+    // at home (or no room): confirm before really leaving
+    if (confirm("Leave Beer Night? 🍺\n\nAll scores are saved — you can come straight back anytime.")) {
+      history.go(-1);
+    } else {
+      history.pushState({ bn: 1 }, "");
+    }
+  }
+});
+// safety net: warn on tab close / refresh while a live night is open
+window.addEventListener("beforeunload", (e)=>{
+  const n = view.nightId ? data.nights?.[view.nightId] : null;
+  if (roomCode && view.page === "night" && n && !n.ended) {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
+
 // ---------- helpers ----------
 const drinksOf = (p) => Object.entries(p.drinks || {}).sort((a,b)=>a[1].ts-b[1].ts);
 const countOf = (p) => Object.keys(p.drinks || {}).length;

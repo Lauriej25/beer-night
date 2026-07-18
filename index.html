@@ -457,15 +457,38 @@ window.actions = {
         <div style="font-family:'Lilita One',system-ui;font-size:20px;margin-bottom:4px;color:var(--foam);">${esc(p.name)}</div>
         <div style="color:var(--muted);font-size:13px;margin-bottom:14px;">${countOf(p)} drinks${p.out ? " · 🏳️ tapped out" : ""}</div>
         ${n.ended ? "" : `<button class="ghost" id="pmUndo" style="width:100%;margin-bottom:8px;color:var(--foam);">↺ Undo last drink</button>`}
+        <button class="ghost" id="pmRen" style="width:100%;margin-bottom:8px;color:var(--foam);">✏️ Rename</button>
         <button class="ghost danger" id="pmDel" style="width:100%;margin-bottom:8px;">🗑 Remove from night</button>
         <button class="btn" id="pmX" style="width:100%;">Cancel</button>
       </div>`;
     m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
     const u = m.querySelector("#pmUndo");
     if (u) u.onclick = ()=>{ m.remove(); actions.undoDrink(pid); };
+    m.querySelector("#pmRen").onclick = ()=>{ m.remove(); actions.renamePerson(pid); };
     m.querySelector("#pmDel").onclick = ()=>{ m.remove(); actions.removePerson(pid); };
     m.querySelector("#pmX").onclick = ()=> m.remove();
     document.body.appendChild(m);
+  },
+  renamePerson(pid){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const p = n.people?.[pid]; if(!p) return;
+    const name = prompt("New name:", p.name);
+    if (name === null) return;                    // cancelled
+    const clean = name.trim().slice(0, 24);
+    if (!clean || clean === p.name) return;
+    p.name = clean;
+    saveData(); render();
+    toast(`✏️ Renamed to ${clean}`);
+  },
+  renameNight(){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const name = prompt("New name for this night:", n.name);
+    if (name === null) return;
+    const clean = name.trim().slice(0, 40);
+    if (!clean || clean === n.name) return;
+    n.name = clean;
+    saveData(); render();
+    toast(`✏️ Night renamed`);
   },
   toggleOut(pid){
     const n = data.nights[view.nightId]; if(!n || n.ended) return;
@@ -1066,7 +1089,7 @@ function renderNight(n){
   app.innerHTML = `
     <button class="back" onclick="actions.goHome()">‹ All nights</button>
     <div style="margin:6px 4px 14px;">
-      <h2 class="logo" style="font-size:26px;margin:0;">${esc(n.name)}</h2>
+      <h2 class="logo" role="button" aria-label="Rename this night" style="font-size:26px;margin:0;cursor:pointer;" onclick="actions.renameNight()">${esc(n.name)} <span style="font-size:14px;opacity:.5;">✏️</span></h2>
       <div class="night-meta">${dateLabel(n.date)}${n.ended ? " · finished" : ""} · 📸 photo + 3 min rule in force</div>
     </div>
     ${n.ended ? "" : `

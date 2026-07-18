@@ -144,7 +144,7 @@
     appId: "1:327161618916:web:2fa3aebb903a8c8730a7f1"
   };
   // Cooldown between drinks per player (milliseconds). 3 minutes minimum.
-  const COOLDOWN_MS = 2 * 60 * 1000;
+  const COOLDOWN_MS = 3 * 60 * 1000;
 </script>
 
 <header>
@@ -418,6 +418,29 @@ camInput.addEventListener("change", async ()=>{
     render();
     return;
   }
+  // 🚨 milestone checkpoint selfie — saved to the gallery, not a drink
+  if (pendingPhoto.checkpoint) {
+    const cpid = pendingPhoto.checkpoint, milestone = pendingPhoto.milestone;
+    pendingPhoto = null;
+    const cn = data.nights[view.nightId];
+    const cp = cn?.people?.[cpid];
+    if (!cp) return;
+    try{
+      statusEl.textContent = "uploading photo…";
+      const b64 = await compressImage(file);
+      const id = "cp_" + uid();
+      await set(ref(db, `rooms/${roomCode}/photos/${id}`), b64);
+      if (!cp.checkpoints) cp.checkpoints = {};
+      cp.checkpoints[id] = { ts: Date.now(), milestone };
+      photoCache[id] = b64;
+      await saveData();
+      toast(`🚨 ${milestone}-beer checkpoint logged!`);
+    }catch(e){
+      showError("Photo upload failed — try again.");
+      statusEl.textContent = "room " + roomCode;
+    }
+    return;
+  }
   const { pid } = pendingPhoto;
   pendingPhoto = null;
   const n = data.nights[view.nightId];
@@ -442,6 +465,11 @@ camInput.addEventListener("change", async ()=>{
     photoCache[drinkId] = b64;
     await saveData();
     toast(`🍺 +1 for ${p.name}!`);
+    // checkpoint time? fires at 10, 20, 30… and re-asks next beer if skipped
+    const milestone = Math.floor(countOf(p) / 10) * 10;
+    if (milestone > 0 && !hasCheckpoint(p, milestone)) {
+      setTimeout(()=> showCheckpointPrompt(pid, milestone), 600);
+    }
   }catch(e){
     showError("Photo upload failed — try again.");
     statusEl.textContent = "room " + roomCode;
@@ -492,6 +520,32 @@ window.addEventListener("beforeunload", (e)=>{
 });
 
 // ---------- helpers ----------
+const hasCheckpoint = (p, milestone) =>
+  Object.values(p.checkpoints || {}).some(c => c.milestone === milestone);
+
+function showCheckpointPrompt(pid, milestone){
+  const n = data.nights[view.nightId];
+  const p = n?.people?.[pid];
+  if (!p || document.querySelector(".modal")) return;
+  const m = document.createElement("div");
+  m.className = "modal"; m.style.flexDirection = "column";
+  m.innerHTML = `
+    <div class="card" style="min-width:280px;max-width:90vw;text-align:center;border-color:var(--amber);">
+      <div style="font-size:44px;margin-bottom:6px;">🚨</div>
+      <div style="font-family:'Lilita One',system-ui;font-size:26px;color:var(--amber);margin-bottom:6px;">${milestone} BEERS!</div>
+      <div style="color:var(--foam);font-size:15px;line-height:1.5;margin-bottom:16px;">Checkpoint selfie time, ${esc(p.name)} — one for the archives. Maybe grab a water while you're at it 💧</div>
+      <button class="btn" id="cpGo" style="width:100%;margin-bottom:8px;">📸 Take the selfie</button>
+      <button class="ghost" id="cpLater" style="width:100%;">Later</button>
+    </div>`;
+  m.querySelector("#cpGo").onclick = ()=>{
+    m.remove();
+    pendingPhoto = { checkpoint: pid, milestone };
+    camInput.click();
+  };
+  m.querySelector("#cpLater").onclick = ()=> m.remove();
+  document.body.appendChild(m);
+}
+
 const drinksOf = (p) => Object.entries(p.drinks || {}).sort((a,b)=>a[1].ts-b[1].ts);
 const countOf = (p) => Object.keys(p.drinks || {}).length;
 const latestDrinkTs = (p) => {
@@ -608,6 +662,10 @@ window.actions = {
       remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
       delete photoCache[id];
     }
+    if (p?.checkpoints) for (const id of Object.keys(p.checkpoints)) {
+      remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
+      delete photoCache[id];
+    }
     if (p?.avatar) {
       remove(ref(db, `rooms/${roomCode}/photos/${p.avatar}`)).catch(()=>{});
       delete photoCache[p.avatar];
@@ -625,7 +683,7 @@ window.actions = {
     const n = data.nights[view.nightId]; if(!n) return;
     if (!confirm("Delete this night (and all its photos) for everyone in the room?")) return;
     for (const p of Object.values(n.people || {})) {
-      for (const id of Object.keys(p.drinks || {})) {
+      for (const id of [...Object.keys(p.drinks || {}), ...Object.keys(p.checkpoints || {})]) {
         remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
         delete photoCache[id];
       }
@@ -695,7 +753,8 @@ window.actions = {
 async function loadGalleryPhotos(pid, nid = view.nightId){
   const n = data.nights[nid]; if(!n) return;
   const p = n.people?.[pid]; if(!p) return;
-  const ids = Object.keys(p.drinks || {}).filter(id => !photoCache[id]);
+  const ids = [...Object.keys(p.drinks || {}), ...Object.keys(p.checkpoints || {})]
+    .filter(id => !photoCache[id]);
   await Promise.all(ids.map(async (id)=>{
     try{
       const snap = await get(ref(db, `rooms/${roomCode}/photos/${id}`));
@@ -852,7 +911,10 @@ async function startSlideshow(nid, pid){
   statusEl.textContent = "loading photos…";
   await loadGalleryPhotos(pid, nid);
   statusEl.textContent = "room " + roomCode;
-  const shots = drinksOf(p).filter(([id])=>photoCache[id]);
+  const shots = [
+    ...drinksOf(p).map(([id,d])=>({ id, ts:d.ts, tag:"" })),
+    ...Object.entries(p.checkpoints || {}).map(([id,c])=>({ id, ts:c.ts, tag:` · 🚨 ${c.milestone}-beer checkpoint` })),
+  ].sort((a,b)=> a.ts - b.ts).filter(s=>photoCache[s.id]);
   if (!shots.length) { toast("No photos found for " + p.name); return; }
   const standings = Object.values(n.people || {}).sort((a,b)=>countOf(b)-countOf(a));
   const pos = standings.findIndex(x=>x.id===pid) + 1;
@@ -868,10 +930,10 @@ async function startSlideshow(nid, pid){
     <div style="color:var(--muted);font-size:12px;margin-top:10px;">tap anywhere to close</div>`;
   const img = m.querySelector("#ssImg"), cap = m.querySelector("#ssCap"), sub = m.querySelector("#ssSub");
   const show = ()=>{
-    const [id, d] = shots[i];
-    img.src = photoCache[id];
+    const s = shots[i];
+    img.src = photoCache[s.id];
     cap.textContent = `${p.name} — ${pos}${posSuffix(pos)} place · ${countOf(p)} drinks 🍺`;
-    sub.textContent = `photo ${i+1} of ${shots.length} · ${timeLabel(d.ts)}`;
+    sub.textContent = `photo ${i+1} of ${shots.length} · ${timeLabel(s.ts)}${s.tag}`;
   };
   show();
   const t = setInterval(()=>{ i = (i+1) % shots.length; show(); }, 2500);
@@ -1156,21 +1218,24 @@ function renderNight(n){
     const p = n.people?.[view.galleryPid];
     if (!p) { view.galleryPid = null; }
     else {
-      const drinks = drinksOf(p).reverse();
+      const shots = [
+        ...drinksOf(p).map(([id,d])=>({ id, ts:d.ts, label: timeLabel(d.ts) })),
+        ...Object.entries(p.checkpoints || {}).map(([id,c])=>({ id, ts:c.ts, label: `🚨 ${c.milestone} · ${timeLabel(c.ts)}` })),
+      ].sort((a,b)=> b.ts - a.ts);
       app.innerHTML = `
         <button class="back" onclick="actions.closeGallery()">‹ Back to leaderboard</button>
         <div style="margin:6px 4px 4px;">
           <h2 class="logo" style="font-size:24px;margin:0;">${esc(p.name)}'s night 📸</h2>
           <div class="night-meta">${countOf(p)} drinks · ${esc(n.name)}</div>
         </div>
-        ${drinks.length===0 ? `<div class="card muted-center" style="margin-top:12px;">No drinks logged yet.</div>` : `
+        ${shots.length===0 ? `<div class="card muted-center" style="margin-top:12px;">No drinks logged yet.</div>` : `
         <div class="gallery">
-          ${drinks.map(([id,d])=>`
-            <div class="shot" onclick="actions.viewPhoto('${id}')">
-              ${photoCache[id]
-                ? `<img src="${photoCache[id]}" alt="Drink proof at ${timeLabel(d.ts)}">`
+          ${shots.map(s=>`
+            <div class="shot" onclick="actions.viewPhoto('${s.id}')">
+              ${photoCache[s.id]
+                ? `<img src="${photoCache[s.id]}" alt="Photo at ${s.label}">`
                 : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">loading…</div>`}
-              <div class="ts">${timeLabel(d.ts)}</div>
+              <div class="ts">${s.label}</div>
             </div>`).join("")}
         </div>`}`;
       return;

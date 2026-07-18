@@ -1203,24 +1203,28 @@ function renderNight(n){
       return `
       <div class="person" style="${p.out ? 'opacity:.55;' : ''}">
         <div class="fill" style="width:${pct}%;${pct===0?'border-right:none;':''}" aria-hidden="true"></div>
-        <div class="person-inner">
-          <span class="rank">${crown ? '👑' : i+1}</span>
-          ${avatarHtml(p)}
-          <span class="pname" role="button" style="cursor:pointer;"
-                aria-label="Options for ${esc(p.name)}"
-                onclick="actions.playerMenu('${p.id}')">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
-          <span class="pcount">${c}</span>
-          <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')">📸</button>
-          ${n.ended ? "" : p.out ? `
-          <button class="plus cooling" style="min-width:112px;font-family:'Lilita One',system-ui;font-size:15px;"
-                  aria-label="${esc(p.name)} rejoins the night"
-                  onclick="actions.toggleOut('${p.id}')">🍺 I'm back</button>` : `
-          <button class="x" style="font-size:15px;" aria-label="${esc(p.name)} taps out for the night"
-                  onclick="actions.toggleOut('${p.id}')">🏳️</button>
-          <button class="plus ${left>0?'cooling':''}" data-cd="${p.id}" ${left>0?'disabled':''}
-                  aria-label="Add a drink for ${esc(p.name)} — photo required"
-                  onclick="actions.requestDrink('${p.id}')">${left>0 ? fmtLeft(left) : "📷 +1"}</button>
-          <button class="x" aria-label="Undo ${esc(p.name)}'s last drink" onclick="actions.undoDrink('${p.id}')">↺</button>`}
+        <div class="person-inner" style="flex-direction:column;align-items:stretch;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+            <span class="rank">${crown ? '👑' : i+1}</span>
+            ${avatarHtml(p)}
+            <span class="pname" role="button" style="cursor:pointer;"
+                  aria-label="Options for ${esc(p.name)}"
+                  onclick="actions.playerMenu('${p.id}')">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
+            <span class="pcount">${c}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
+            <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')">📸</button>
+            ${n.ended ? "" : p.out ? `
+            <button class="plus cooling" style="min-width:132px;font-family:'Lilita One',system-ui;font-size:15px;"
+                    aria-label="${esc(p.name)} rejoins the night"
+                    onclick="actions.toggleOut('${p.id}')">🍺 I'm back</button>` : `
+            <button class="cam" style="font-size:15px;" aria-label="${esc(p.name)} taps out for the night"
+                    onclick="actions.toggleOut('${p.id}')">🏳️</button>
+            <button class="plus ${left>0?'cooling':''}" data-cd="${p.id}" ${left>0?'disabled':''}
+                    aria-label="Add a drink for ${esc(p.name)} — photo required"
+                    onclick="actions.requestDrink('${p.id}')">${left>0 ? fmtLeft(left) : "📷 +1"}</button>
+            <button class="cam" aria-label="Undo ${esc(p.name)}'s last drink" onclick="actions.undoDrink('${p.id}')">↺</button>`}
+          </div>
         </div>
       </div>`;
     }).join("")}

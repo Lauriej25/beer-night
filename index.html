@@ -84,7 +84,14 @@
   .ghost{background:var(--card);color:var(--foam);border:3px solid var(--edge);border-radius:14px;padding:9px 16px;font-size:14px;font-weight:700;box-shadow:0 4px 0 var(--edge);transition:transform .08s ease, box-shadow .08s ease;display:inline-flex;align-items:center;gap:6px;}
   .ghost:active{transform:translateY(3px);box-shadow:0 1px 0 var(--edge);}
   .ghost.danger{color:#fff;background:var(--danger);border-color:#7a2013;box-shadow:0 4px 0 #7a2013;}
-  .back{background:none;border:none;color:var(--amber);font-family:'Lilita One',system-ui;font-size:15px;padding:6px 4px;}
+  .back{
+    background:var(--card);color:var(--foam);border:3px solid var(--edge);border-radius:14px;
+    font-family:'Lilita One',system-ui;font-size:14px;letter-spacing:.3px;
+    padding:8px 14px 8px 10px;margin:2px 0 10px;box-shadow:0 4px 0 var(--edge);
+    display:inline-flex;align-items:center;gap:4px;transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .back:active{transform:translateY(3px);box-shadow:0 1px 0 var(--edge);}
+  .back .icon{width:16px;height:16px;}
   .night-row{
     display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;
     background:var(--card);border:3px solid var(--edge);border-radius:18px;
@@ -156,7 +163,20 @@
     border:3px solid var(--edge);box-shadow:0 6px 0 var(--amber-deep);
     animation:toastIn .35s cubic-bezier(.34,1.56,.64,1);
   }
-  @keyframes toastIn{0%{transform:translateX(-50%) translateY(16px) scale(.85);opacity:0;}100%{transform:translateX(-50%) translateY(0) scale(1);opacity:1;}}
+  .tabbar{display:flex;gap:6px;background:var(--card);border:3px solid var(--edge);border-radius:14px;padding:4px;margin-bottom:14px;box-shadow:var(--shadow-ink);}
+  .tab{flex:1;background:none;border:none;border-radius:10px;padding:9px 6px;font-family:'Lilita One',system-ui;font-size:13px;letter-spacing:.3px;color:var(--muted);display:flex;align-items:center;justify-content:center;gap:5px;transition:background-color .15s ease, color .15s ease;}
+  .tab.active{background:linear-gradient(180deg,var(--amber-bright),var(--amber));color:#2B1400;}
+  .tab .icon{width:14px;height:14px;}
+  .lb-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:2px dashed var(--edge);}
+  .lb-row:last-child{border-bottom:none;}
+  .lb-rank{font-family:'Lilita One',system-ui;font-size:15px;width:24px;text-align:center;color:var(--muted);}
+  .lb-rank.top1{color:var(--amber);font-size:18px;}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .stat-tile{background:var(--card);border:3px solid var(--edge);border-radius:16px;padding:12px;box-shadow:var(--shadow-ink);text-align:center;}
+  .stat-tile .icon{width:22px;height:22px;color:var(--amber);margin-bottom:4px;}
+  .stat-tile .stat-label{font-size:10px;font-weight:800;letter-spacing:.6px;color:var(--muted);}
+  .stat-tile .stat-value{font-family:'Lilita One',system-ui;font-size:15px;margin-top:2px;line-height:1.25;}
+  .stat-tile .stat-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:1px;}
   @keyframes crownBounce{0%,100%{transform:translateY(0) rotate(-6deg);}50%{transform:translateY(-4px) rotate(6deg);}}
   @keyframes livePulse{0%,100%{box-shadow:0 0 0 0 rgba(255,92,130,.55);}50%{box-shadow:0 0 0 6px rgba(255,92,130,0);}}
   @keyframes readyPulse{0%,100%{box-shadow:0 5px 0 var(--amber-deep);}50%{box-shadow:0 5px 0 var(--amber-deep), 0 0 0 6px rgba(242,121,10,.3);}}
@@ -428,14 +448,36 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const dateLabel = (iso) => { try { return new Date(iso).toLocaleDateString(undefined,{weekday:'short',day:'numeric',month:'short',year:'numeric'}); } catch { return iso; } };
 const timeLabel = (ts) => new Date(ts).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+const timeOfDayMinutes = (ts) => { const d = new Date(ts); return d.getHours()*60 + d.getMinutes(); };
+const fmtGap = (ms) => {
+  const mins = Math.round(ms/60000);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins/60), m = mins%60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+};
 
 // ---------- state ----------
 let db=null, roomCode=null, dataRef=null, unsubscribe=null;
-let data = { nights: {} };
+let data = { nights: {}, roster: {} };
 let view = { page:"home", nightId:null, galleryPid:null };
+let homeTab = "top10";              // which tab the home-screen leaderboard shows
 let pendingPhoto = null;           // {pid} while waiting for camera
 let tick = null;                   // cooldown countdown timer
 const photoCache = {};             // photoId -> base64 (fetched on demand)
+
+// ---------- roster: names remembered per room, reused across nights ----------
+// Each roster entry keeps the SAME id every night, so a person's drink
+// history links up across nights and can be summed into a lifetime total.
+const normName = (s) => String(s||"").trim().toLowerCase();
+function findRosterByName(name){
+  const nn = normName(name);
+  return Object.values(data.roster || {}).find(r => normName(r.name) === nn) || null;
+}
+function upsertRoster(id, name, avatar){
+  if (!data.roster) data.roster = {};
+  const existing = data.roster[id];
+  data.roster[id] = { id, name, avatar: avatar !== undefined ? avatar : existing?.avatar };
+}
 
 // ---------- config check ----------
 const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("PASTE");
@@ -555,12 +597,24 @@ function joinRoom(code){
   // so the live listener never downloads image blobs.
   dataRef = ref(db, `rooms/${code}/data`);
   statusEl.textContent = "connecting…";
+  let firstLoad = true;
   unsubscribe = onValue(dataRef, (snap)=>{
     data = snap.val() || { nights: {} };
     if (!data.nights) data.nights = {};
+    if (!data.roster) data.roster = {};
     statusEl.textContent = "room " + code;
     showError("");
     if (!joinRoom._chimed) { joinRoom._chimed = true; window.AudioFX && window.AudioFX.chime(); }
+    if (firstLoad) {
+      firstLoad = false;
+      // if the app had to reload mid-night (e.g. the OS reclaimed the tab
+      // while the camera app was open), jump straight back into that
+      // night instead of dropping to the room list.
+      const lastNight = localStorage.getItem("beernight-lastnight-" + code);
+      if (lastNight && data.nights[lastNight]) {
+        view = { page:"night", nightId:lastNight, galleryPid:null };
+      }
+    }
     render();
   }, ()=> showError("Can't reach the database. Check your connection (or database rules if test mode expired)."));
 }
@@ -568,7 +622,7 @@ function joinRoom(code){
 function leaveRoom(){
   localStorage.removeItem("beernight-room");
   if (unsubscribe) unsubscribe();
-  roomCode=null; data={nights:{}}; view={page:"home",nightId:null,galleryPid:null};
+  roomCode=null; data={nights:{},roster:{}}; view={page:"home",nightId:null,galleryPid:null};
   renderRoomPicker();
 }
 
@@ -600,6 +654,78 @@ function compressImage(file, maxDim = 400, quality = 0.55){
   });
 }
 
+// ---------- in-page camera (fixes "kicked out" on phones) ----------
+// Handing a photo off to <input capture> opens the phone's native camera
+// APP, which backgrounds this tab — and on tight-memory phones (mostly
+// iPhones) the browser sometimes just kills and reloads the tab while
+// it's backgrounded. Coming back then looks like getting bounced out of
+// the night. Taking the photo with an in-page <video> preview instead
+// keeps this tab active the whole time, so there's nothing to discard.
+// If the browser/device can't do that (old browser, no camera, insecure
+// context, permission denied), it falls straight back to the original
+// native-camera-app flow so nothing is ever left broken.
+let activeStream = null;
+function stopActiveStream(){
+  if (activeStream) { activeStream.getTracks().forEach(t=>t.stop()); activeStream = null; }
+}
+function canUseInPageCamera(){
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.isSecureContext);
+}
+function openCameraModal(onDone){
+  const m = document.createElement("div");
+  m.className = "modal"; m.style.flexDirection = "column";
+  m.innerHTML = `
+    <div class="card" style="padding:10px;max-width:420px;width:100%;">
+      <video id="camPreview" autoplay playsinline muted style="width:100%;border-radius:12px;background:#000;display:block;transform:scaleX(-1);"></video>
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="ghost" id="camCancel" style="flex:1;">Cancel</button>
+        <button class="btn" id="camShoot" style="flex:2;"><svg class="icon"><use href="#icon-camera"></use></svg> Take photo</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  const video = m.querySelector("#camPreview");
+  const finish = (file)=>{ stopActiveStream(); m.remove(); onDone(file); };
+  m.querySelector("#camCancel").onclick = ()=> finish(null);
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+    .then(stream=>{
+      activeStream = stream;
+      video.srcObject = stream;
+    })
+    .catch(()=> finish(undefined));   // undefined = "couldn't open in-page camera", caller should fall back
+  m.querySelector("#camShoot").onclick = ()=>{
+    if (!video.videoWidth) return;    // stream not ready yet
+    const cv = document.createElement("canvas");
+    cv.width = video.videoWidth; cv.height = video.videoHeight;
+    const cx = cv.getContext("2d");
+    cx.translate(cv.width, 0); cx.scale(-1, 1);   // un-mirror the selfie preview
+    cx.drawImage(video, 0, 0);
+    cv.toBlob(blob=>{
+      finish(blob ? new File([blob], "photo.jpg", { type:"image/jpeg" }) : undefined);
+    }, "image/jpeg", 0.9);
+  };
+}
+// Delivers a captured File into a real <input type=file> and fires its
+// existing 'change' handler, so every downstream upload/compress/save
+// code path stays exactly as-is regardless of which camera path was used.
+function deliverToInput(input, file){
+  try{
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event("change", { bubbles:true }));
+  }catch(e){
+    showError("Couldn't attach that photo — try again.");
+  }
+}
+function captureViaCamera(input){
+  if (!canUseInPageCamera()) { input.click(); return; }   // old browser / http — original flow
+  openCameraModal(file=>{
+    if (file === undefined) { input.click(); return; }     // in-page camera failed — fall back
+    if (!file) return;                                      // user cancelled — do nothing
+    deliverToInput(input, file);
+  });
+}
+
 // ----- avatar upload (separate input so people can pick from their gallery too) -----
 const avInput = document.getElementById("avInput");
 let pendingAvatar = null;   // pid awaiting an avatar photo
@@ -621,6 +747,7 @@ avInput.addEventListener("change", async ()=>{
       delete photoCache[p.avatar];
     }
     p.avatar = newId;
+    upsertRoster(pid, p.name, newId);
     photoCache[newId] = b64;
     await saveData();
     toast(`📷 Photo set for ${p.name}`);
@@ -801,7 +928,7 @@ function showCheckpointPrompt(pid, milestone){
   m.querySelector("#cpGo").onclick = ()=>{
     m.remove();
     pendingPhoto = { checkpoint: pid, milestone };
-    camInput.click();
+    captureViaCamera(camInput);
   };
   m.querySelector("#cpLater").onclick = ()=> m.remove();
   document.body.appendChild(m);
@@ -823,6 +950,57 @@ const fmtLeft = (ms) => {
   return `${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
 };
 
+// ---------- lifetime stats: the "Hall of Fame" on the home screen ----------
+// Walks every night in the room and rolls each roster id's drinks up into
+// an all-time total, plus a few fun/useless side stats. Runs client-side
+// off data already synced — no extra Firebase reads.
+function computeStats(){
+  const nights = Object.values(data.nights || {});
+  const totals = {};        // id -> {id,name,avatar,totalDrinks,nightsPlayed}
+  const nightTotals = [];   // {id,name,date,total,peopleCount}
+  const paceByPerson = {};  // id -> {id,name,gaps:[ms,...]}
+  let earliest = null, latest = null;   // {ts,name,nightName}
+  let totalDrinksAll = 0, totalPhotos = 0;
+
+  nights.forEach(n=>{
+    const people = Object.values(n.people || {});
+    let nightTotal = 0;
+    people.forEach(p=>{
+      const c = countOf(p);
+      nightTotal += c;
+      totalDrinksAll += c;
+      totalPhotos += c + Object.keys(p.checkpoints||{}).length;
+      if (!totals[p.id]) totals[p.id] = { id:p.id, name:p.name, avatar:p.avatar, totalDrinks:0, nightsPlayed:0 };
+      totals[p.id].totalDrinks += c;
+      totals[p.id].name = p.name;                    // most recently seen spelling
+      if (p.avatar) totals[p.id].avatar = p.avatar;
+      if (c > 0) totals[p.id].nightsPlayed += 1;
+
+      const ds = drinksOf(p);
+      if (ds.length >= 2) {
+        const gaps = [];
+        for (let i=1;i<ds.length;i++) gaps.push(ds[i][1].ts - ds[i-1][1].ts);
+        const avg = gaps.reduce((a,b)=>a+b,0) / gaps.length;
+        if (!paceByPerson[p.id]) paceByPerson[p.id] = { id:p.id, name:p.name, gaps:[] };
+        paceByPerson[p.id].gaps.push(avg);
+      }
+      ds.forEach(([,d])=>{
+        if (!earliest || timeOfDayMinutes(d.ts) < timeOfDayMinutes(earliest.ts)) earliest = { ts:d.ts, name:p.name, nightName:n.name };
+        if (!latest || timeOfDayMinutes(d.ts) > timeOfDayMinutes(latest.ts)) latest = { ts:d.ts, name:p.name, nightName:n.name };
+      });
+    });
+    if (nightTotal > 0) nightTotals.push({ id:n.id, name:n.name, date:n.date, total:nightTotal, peopleCount:people.filter(p=>countOf(p)>0).length });
+  });
+
+  const top10 = Object.values(totals).sort((a,b)=> b.totalDrinks-a.totalDrinks || a.name.localeCompare(b.name)).slice(0,10);
+  const biggestNight = [...nightTotals].sort((a,b)=>b.total-a.total)[0] || null;
+  const paceList = Object.values(paceByPerson).map(p=> ({ id:p.id, name:p.name, avgGapMs: p.gaps.reduce((a,b)=>a+b,0)/p.gaps.length }));
+  const slowest = [...paceList].sort((a,b)=> b.avgGapMs-a.avgGapMs)[0] || null;    // longest gap between drinks
+  const fastest = [...paceList].sort((a,b)=> a.avgGapMs-b.avgGapMs)[0] || null;    // shortest gap between drinks
+
+  return { top10, biggestNight, slowest, fastest, earliest, latest, totalDrinksAll, totalPhotos, nightsCount: nights.length, peopleCount: Object.keys(totals).length };
+}
+
 // ---------- actions ----------
 window.actions = {
   createNight(){
@@ -830,19 +1008,38 @@ window.actions = {
     const id = uid();
     data.nights[id] = { id, name, date:new Date().toISOString(), ended:false, people:{} };
     view = { page:"night", nightId:id, galleryPid:null };
+    localStorage.setItem("beernight-lastnight-"+roomCode, id);
     saveData(); render();
   },
-  openNight(id){ view={page:"night",nightId:id,galleryPid:null}; render(); },
-  goHome(){ view={page:"home",nightId:null,galleryPid:null}; render(); },
+  openNight(id){ view={page:"night",nightId:id,galleryPid:null}; localStorage.setItem("beernight-lastnight-"+roomCode, id); render(); },
+  goHome(){ view={page:"home",nightId:null,galleryPid:null}; localStorage.removeItem("beernight-lastnight-"+roomCode); render(); },
   addPerson(){
     const n = data.nights[view.nightId]; if(!n) return;
-    const name = $("#personName").value.trim(); if(!name) return;
+    const raw = $("#personName").value.trim(); if(!raw) return;
     if(!n.people) n.people = {};
-    const id = uid();
+    const match = findRosterByName(raw);
+    if (match && n.people[match.id]) {
+      toast(`👋 ${match.name} is already in this night`);
+      $("#personName").value = "";
+      return;
+    }
+    const id = match ? match.id : uid();
+    const name = match ? match.name : raw;   // reuse the roster's saved spelling/casing
     n.people[id] = { id, name, drinks:{} };
+    upsertRoster(id, name);
+    $("#personName").value = "";
+    saveData(); render();
+  },
+  addFromRoster(rid){
+    const n = data.nights[view.nightId]; if(!n || n.ended) return;
+    const r = data.roster?.[rid]; if(!r) return;
+    if(!n.people) n.people = {};
+    if (n.people[rid]) { toast(`👋 ${r.name} is already in this night`); return; }
+    n.people[rid] = { id: rid, name: r.name, drinks:{} };
     saveData(); render();
   },
   pickRoom(code){ joinRoom(code); },
+  setHomeTab(tab){ homeTab = tab; render(); },
   playerMenu(pid){
     const n = data.nights[view.nightId]; if(!n) return;
     const p = n.people?.[pid]; if(!p) return;
@@ -861,7 +1058,7 @@ window.actions = {
     m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
     const u = m.querySelector("#pmUndo");
     if (u) u.onclick = ()=>{ m.remove(); actions.undoDrink(pid); };
-    m.querySelector("#pmAv").onclick = ()=>{ m.remove(); pendingAvatar = pid; avInput.click(); };
+    m.querySelector("#pmAv").onclick = ()=>{ m.remove(); pendingAvatar = pid; captureViaCamera(avInput); };
     m.querySelector("#pmRen").onclick = ()=>{ m.remove(); actions.renamePerson(pid); };
     m.querySelector("#pmDel").onclick = ()=>{ m.remove(); actions.removePerson(pid); };
     m.querySelector("#pmX").onclick = ()=> m.remove();
@@ -874,7 +1071,10 @@ window.actions = {
     if (name === null) return;                    // cancelled
     const clean = name.trim().slice(0, 24);
     if (!clean || clean === p.name) return;
+    const dupe = findRosterByName(clean);
+    if (dupe && dupe.id !== pid && !confirm(`${dupe.name} is already a name in this room's roster. Rename anyway?`)) return;
     p.name = clean;
+    upsertRoster(pid, clean, p.avatar);
     saveData(); render();
     toast(`✏️ Renamed to ${clean}`);
   },
@@ -901,7 +1101,7 @@ window.actions = {
     if (p.out) { toast(`🏳️ ${p.name} has tapped out`); return; }
     if (cooldownLeft(p) > 0) { toast("⏳ Too soon — pace yourself!"); return; }
     pendingPhoto = { pid };
-    camInput.click(); // opens camera — photo required to earn the point
+    captureViaCamera(camInput); // in-page camera, falls back to native if needed
   },
   async undoDrink(pid){
     const n = data.nights[view.nightId]; if(!n) return;
@@ -954,6 +1154,7 @@ window.actions = {
       }
     }
     delete data.nights[view.nightId];
+    localStorage.removeItem("beernight-lastnight-"+roomCode);
     view = {page:"home",nightId:null,galleryPid:null};
     saveData(); render();
   },
@@ -999,7 +1200,7 @@ window.actions = {
   },
   testCamera(){
     pendingPhoto = { test: true };
-    camInput.click();
+    captureViaCamera(camInput);
   },
   openRecap(nid){
     markRecapSeen(nid);
@@ -1025,6 +1226,60 @@ async function loadGalleryPhotos(pid, nid = view.nightId){
 }
 
 // ---------- render ----------
+// ---------- Hall of Fame: home-screen leaderboard + fun stats ----------
+function renderHallOfFame(){
+  const s = computeStats();
+  if (s.totalDrinksAll === 0) return "";   // nothing logged yet — don't show an empty trophy case
+
+  const tabs = `
+    <div class="tabbar">
+      <button class="tab ${homeTab==='top10'?'active':''}" onclick="actions.setHomeTab('top10')"><svg class="icon"><use href="#icon-trophy"></use></svg> Top 10</button>
+      <button class="tab ${homeTab==='stats'?'active':''}" onclick="actions.setHomeTab('stats')"><svg class="icon"><use href="#icon-medal"></use></svg> Fun stats</button>
+    </div>`;
+
+  if (homeTab === 'top10') {
+    ensureAvatars(s.top10);
+    return `
+    <h2 class="section"><svg class="icon"><use href="#icon-trophy"></use></svg> Hall of Fame</h2>
+    <div class="card">
+      ${tabs}
+      <div style="color:var(--muted);font-size:11px;font-weight:700;margin-bottom:6px;">ALL-TIME · ${s.peopleCount} ${s.peopleCount===1?'player':'players'} · ${s.nightsCount} ${s.nightsCount===1?'night':'nights'} · ${s.totalDrinksAll} drinks logged</div>
+      ${s.top10.map((p,i)=>`
+        <div class="lb-row">
+          <span class="lb-rank ${i===0?'top1':''}">${i===0?'<svg class="icon" style="width:18px;height:18px;"><use href="#icon-crown"></use></svg>':i+1}</span>
+          ${avatarHtml(p)}
+          <span class="pname">${esc(p.name)}</span>
+          <span class="night-meta" style="margin:0;white-space:nowrap;">${p.nightsPlayed} ${p.nightsPlayed===1?'night':'nights'}</span>
+          <span class="pcount">${p.totalDrinks}</span>
+        </div>`).join("")}
+    </div>`;
+  }
+
+  const tiles = [];
+  if (s.biggestNight) tiles.push({icon:'controller', label:'BIGGEST NIGHT', value: esc(s.biggestNight.name), sub:`${s.biggestNight.total} drinks · ${s.biggestNight.peopleCount} people`});
+  if (s.slowest) tiles.push({icon:'medal', label:'SLOWEST SIPPER', value: esc(s.slowest.name), sub:`~${fmtGap(s.slowest.avgGapMs)} between beers`});
+  if (s.fastest) tiles.push({icon:'siren', label:'FASTEST GULPER', value: esc(s.fastest.name), sub:`~${fmtGap(s.fastest.avgGapMs)} between beers`});
+  if (s.latest) tiles.push({icon:'moon', label:'NIGHT OWL', value: esc(s.latest.name), sub:`logged one at ${timeLabel(s.latest.ts)}`});
+  if (s.earliest) tiles.push({icon:'sunrise', label:'EARLY BIRD', value: esc(s.earliest.name), sub:`logged one at ${timeLabel(s.earliest.ts)}`});
+  tiles.push({icon:'camera', label:'PROOF PHOTOS', value: `${s.totalPhotos}`, sub:'taken for the archives'});
+
+  return `
+    <h2 class="section"><svg class="icon"><use href="#icon-trophy"></use></svg> Hall of Fame</h2>
+    <div class="card">
+      ${tabs}
+      <div class="stat-grid">
+        ${tiles.map(t=>`
+        <div class="stat-tile">
+          <svg class="icon"><use href="#icon-${t.icon}"></use></svg>
+          <div class="stat-label">${t.label}</div>
+          <div class="stat-value">${t.value}</div>
+          <div class="stat-sub">${t.sub}</div>
+        </div>`).join("")}
+      </div>
+      ${tiles.length < 3 ? `<div class="hint" style="margin-top:12px;">More stats unlock once a few players log a couple of rounds each.</div>` : ""}
+    </div>`;
+}
+
 function render(){
   if (!roomCode) return;
   clearInterval(tick);
@@ -1071,6 +1326,7 @@ function render(){
         <button class="btn" onclick="actions.createNight()">Start <svg class="icon filled"><use href="#icon-play"></use></svg></button>
       </div>
     </div>
+    ${renderHallOfFame()}
     <h2 class="section"><svg class="icon"><use href="#icon-trophy"></use></svg> Choose your night</h2>
     ${nights.length===0 ? `<div class="card muted-center">No nights yet. Start one above and add your friends.</div>` : ""}
     ${nights.map(n=>{
@@ -1129,7 +1385,7 @@ function renderRecap(nid){
   ensureAvatars(people);
   const medalColors = ["#FFD24A","#D6D9E0","#E0A45E"];
   app.innerHTML = `
-    <button class="back" onclick="actions.closeRecap()">‹ Back</button>
+    <button class="back" onclick="actions.closeRecap()"><svg class="icon" style="transform:scaleX(-1);"><use href="#icon-chevron"></use></svg> Back</button>
     <div style="margin:6px 4px 16px;text-align:center;">
       <h2 class="logo" style="font-size:28px;margin:0;"><svg class="icon"><use href="#icon-sunrise"></use></svg> Morning After</h2>
       <div class="night-meta">${esc(n.name)} · ${dateLabel(n.date)}</div>
@@ -1213,7 +1469,7 @@ const QR_STYLES = [
 function renderInvite(){
   const style = localStorage.getItem("beernight-qrstyle") || "mug";
   app.innerHTML = `
-    <button class="back" onclick="actions.closeInvite()">‹ Back</button>
+    <button class="back" onclick="actions.closeInvite()"><svg class="icon" style="transform:scaleX(-1);"><use href="#icon-chevron"></use></svg> Back</button>
     <div style="margin:6px 4px 12px;">
       <h2 class="logo" style="font-size:24px;margin:0;">Invite the crew</h2>
       <div class="night-meta">Scan to join room ${esc(roomCode)} — camera app, no typing.</div>
@@ -1484,7 +1740,7 @@ function renderNight(n){
         ...Object.entries(p.checkpoints || {}).map(([id,c])=>({ id, ts:c.ts, label: `🚨 ${c.milestone} · ${timeLabel(c.ts)}` })),
       ].sort((a,b)=> b.ts - a.ts);
       app.innerHTML = `
-        <button class="back" onclick="actions.closeGallery()">‹ Back to leaderboard</button>
+        <button class="back" onclick="actions.closeGallery()"><svg class="icon" style="transform:scaleX(-1);"><use href="#icon-chevron"></use></svg> Back to leaderboard</button>
         <div style="margin:6px 4px 4px;">
           <h2 class="logo" style="font-size:24px;margin:0;">${esc(p.name)}'s night 📸</h2>
           <div class="night-meta">${countOf(p)} drinks · ${esc(n.name)}</div>
@@ -1508,7 +1764,7 @@ function renderNight(n){
   ensureAvatars(people);
 
   app.innerHTML = `
-    <button class="back" onclick="actions.goHome()">‹ All nights</button>
+    <button class="back" onclick="actions.goHome()"><svg class="icon" style="transform:scaleX(-1);"><use href="#icon-chevron"></use></svg> All nights</button>
     <div style="margin:6px 4px 14px;">
       <h2 class="logo" role="button" aria-label="Rename this night" style="font-size:26px;margin:0;cursor:pointer;" onclick="actions.renameNight()">${esc(n.name)} <span style="font-size:14px;opacity:.5;">✏️</span></h2>
       <div class="night-meta">${dateLabel(n.date)}${n.ended ? " · finished" : ""} · 📸 photo + 3 min rule in force</div>
@@ -1519,6 +1775,17 @@ function renderNight(n){
         <input id="personName" placeholder="Add a friend…" maxlength="24">
         <button class="btn" onclick="actions.addPerson()">Add</button>
       </div>
+      ${(() => {
+        const known = Object.values(data.roster || {}).filter(r => !n.people?.[r.id]);
+        if (!known.length) return "";
+        return `
+        <div style="margin-top:12px;">
+          <div style="color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.5px;margin-bottom:6px;">KNOWN IN THIS ROOM — TAP TO ADD</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${known.map(r => `<button class="room-pill" onclick="actions.addFromRoster('${r.id}')">${esc(r.name)}</button>`).join("")}
+          </div>
+        </div>`;
+      })()}
     </div>`}
     ${people.length===0 ? `<div class="card muted-center">Add your friends above — first sip starts the race.</div>` : ""}
     ${people.map((p,i)=>{

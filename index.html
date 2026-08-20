@@ -468,16 +468,33 @@ const photoCache = {};             // photoId -> base64 (fetched on demand)
 // ---------- roster: names remembered per room, reused across nights ----------
 // Each roster entry keeps the SAME id every night, so a person's drink
 // history links up across nights and can be summed into a lifetime total.
-const normName = (s) => String(s||"").trim().toLowerCase();
+// Matching strips everything but letters/digits and lowercases, so "Bob",
+// "BOB", "B o b" and "b.o.b" are all treated as the same name.
+const nameCore = (s) => String(s||"").toLowerCase().replace(/[^a-z0-9]/g, "");
 function findRosterByName(name){
-  const nn = normName(name);
-  return Object.values(data.roster || {}).find(r => normName(r.name) === nn) || null;
+  const core = nameCore(name);
+  if (!core) return null;
+  return Object.values(data.roster || {}).find(r => nameCore(r.name) === core) || null;
 }
 function upsertRoster(id, name, avatar){
   if (!data.roster) data.roster = {};
   const existing = data.roster[id];
   data.roster[id] = { id, name, avatar: avatar !== undefined ? avatar : existing?.avatar };
 }
+// Catches joke/junk entries like "Bob-bOb-bob-bOB" or "Bob Bob Bob" — a
+// short word repeated with separators and mixed case instead of a real
+// name — and asks for a real one instead of quietly accepting it.
+function validateName(raw){
+  const clean = raw.trim().replace(/\s+/g, " ");
+  if (!clean) return { ok:false, message:"Type a name first." };
+  const segments = clean.split(/[\s\-_.]+/).filter(Boolean);
+  if (segments.length >= 2 && segments.every(seg => seg.toLowerCase() === segments[0].toLowerCase())) {
+    const suggestion = segments[0][0].toUpperCase() + segments[0].slice(1).toLowerCase();
+    return { ok:false, message:`"${clean}" is just "${suggestion}" repeated — try "${suggestion}".` };
+  }
+  return { ok:true, name: clean };
+}
+
 
 // ---------- config check ----------
 const configured = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith("PASTE");
@@ -1015,18 +1032,28 @@ window.actions = {
   goHome(){ view={page:"home",nightId:null,galleryPid:null}; localStorage.removeItem("beernight-lastnight-"+roomCode); render(); },
   addPerson(){
     const n = data.nights[view.nightId]; if(!n) return;
-    const raw = $("#personName").value.trim(); if(!raw) return;
+    const raw = $("#personName").value; if(!raw.trim()) return;
     if(!n.people) n.people = {};
-    const match = findRosterByName(raw);
-    if (match && n.people[match.id]) {
-      toast(`👋 ${match.name} is already in this night`);
-      $("#personName").value = "";
+
+    const v = validateName(raw);
+    if (!v.ok) { toast(v.message); return; }
+
+    const match = findRosterByName(v.name);
+    if (match) {
+      // Someone with this name already exists in the room — don't silently
+      // fold a typed name into them (two real people can share a first
+      // name). Send the person to the one-tap chip instead, or ask for a
+      // different name.
+      if (n.people[match.id]) {
+        toast(`👋 ${match.name} is already in this night`);
+      } else {
+        toast(`"${match.name}" is already a name in this room — tap their chip below to add them, or use a different name.`);
+      }
       return;
     }
-    const id = match ? match.id : uid();
-    const name = match ? match.name : raw;   // reuse the roster's saved spelling/casing
-    n.people[id] = { id, name, drinks:{} };
-    upsertRoster(id, name);
+    const id = uid();
+    n.people[id] = { id, name: v.name, drinks:{} };
+    upsertRoster(id, v.name);
     $("#personName").value = "";
     saveData(); render();
   },
@@ -1069,14 +1096,15 @@ window.actions = {
     const p = n.people?.[pid]; if(!p) return;
     const name = prompt("New name:", p.name);
     if (name === null) return;                    // cancelled
-    const clean = name.trim().slice(0, 24);
-    if (!clean || clean === p.name) return;
-    const dupe = findRosterByName(clean);
-    if (dupe && dupe.id !== pid && !confirm(`${dupe.name} is already a name in this room's roster. Rename anyway?`)) return;
-    p.name = clean;
-    upsertRoster(pid, clean, p.avatar);
+    const v = validateName(name.trim().slice(0, 24));
+    if (!v.ok) { toast(v.message); return; }
+    if (v.name === p.name) return;
+    const dupe = findRosterByName(v.name);
+    if (dupe && dupe.id !== pid) { toast(`"${dupe.name}" is already a name in this room — pick a different one.`); return; }
+    p.name = v.name;
+    upsertRoster(pid, v.name, p.avatar);
     saveData(); render();
-    toast(`✏️ Renamed to ${clean}`);
+    toast(`✏️ Renamed to ${v.name}`);
   },
   renameNight(){
     const n = data.nights[view.nightId]; if(!n) return;

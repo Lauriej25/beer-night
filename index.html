@@ -779,7 +779,7 @@ function renderTriviaRoundModal(){
       ${people.length===0 ? `<div class="hint" style="margin:0 0 14px;">Add some players first!</div>` : `
       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
         ${people.map(p=>{
-          const pick = t.picks[p.id];
+          const pick = (t.picks || {})[p.id];
           const correct = t.revealed && pick === t.correctIndex;
           const wrong = t.revealed && pick !== undefined && pick !== t.correctIndex;
           return `
@@ -1533,6 +1533,7 @@ window.actions = {
   },
   pickTriviaOption(pid, optIndex){
     const n = data.nights[view.nightId]; if(!n || !n.trivia || n.trivia.revealed) return;
+    if (!n.trivia.picks) n.trivia.picks = {};
     n.trivia.picks[pid] = optIndex;
     saveData();
     renderTriviaRoundModal();
@@ -1541,7 +1542,7 @@ window.actions = {
     const n = data.nights[view.nightId]; if(!n || !n.trivia || n.trivia.revealed) return;
     n.trivia.revealed = true;
     const winners = [];
-    for (const [pid, optIndex] of Object.entries(n.trivia.picks)) {
+    for (const [pid, optIndex] of Object.entries(n.trivia.picks || {})) {
       if (optIndex !== n.trivia.correctIndex) continue;
       if (!data.roster[pid]) continue;
       const before = data.roster[pid].trivia || 0;

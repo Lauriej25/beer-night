@@ -832,7 +832,11 @@ function findRosterByName(name){
 function upsertRoster(id, name, avatar){
   if (!data.roster) data.roster = {};
   const existing = data.roster[id];
-  data.roster[id] = { id, name, avatar: avatar !== undefined ? avatar : existing?.avatar };
+  const resolvedAvatar = avatar !== undefined ? avatar : existing?.avatar;
+  // Firebase's set() throws (and every save fails) if any value anywhere
+  // in the object is literally `undefined` — so the avatar key is only
+  // included when there's an actual value, never written as undefined.
+  data.roster[id] = resolvedAvatar !== undefined ? { id, name, avatar: resolvedAvatar } : { id, name };
 }
 // Catches joke/junk entries like "Bob-bOb-bob-bOB" or "Bob Bob Bob" — a
 // short word repeated with separators and mixed case instead of a real

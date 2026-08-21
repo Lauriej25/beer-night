@@ -123,6 +123,28 @@
   }
   .person-inner{position:relative;display:flex;align-items:center;gap:8px;}
   .avatar{width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--edge);flex-shrink:0;}
+  .avatar-btn{background:none;border:none;padding:0;margin:0;cursor:pointer;line-height:0;flex-shrink:0;}
+  .selfie-btn{
+    width:100%;background:linear-gradient(180deg,var(--pink),#E8447A);color:#fff;border:3px solid var(--edge);
+    border-radius:14px;padding:10px 8px;font-family:'Lilita One',system-ui;font-size:13px;letter-spacing:.3px;
+    box-shadow:0 4px 0 #A8305C;display:flex;align-items:center;justify-content:center;gap:6px;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .selfie-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #A8305C;}
+  .selfie-btn .icon{width:15px;height:15px;}
+  .trivia-hover{
+    width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+    background:linear-gradient(180deg,var(--pink),#E8447A);color:#fff;border:3px solid var(--edge);
+    border-radius:16px;padding:12px 10px;font-family:'Lilita One',system-ui;font-size:14px;
+    box-shadow:0 5px 0 #A8305C;margin-bottom:16px;animation:triviaHover 2.2s ease-in-out infinite;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .trivia-hover:active{transform:translateY(4px);box-shadow:0 1px 0 #A8305C;}
+  .trivia-hover .icon{width:20px;height:20px;color:var(--amber-bright);}
+  @keyframes triviaHover{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
+  @media (prefers-reduced-motion:reduce){ .trivia-hover{animation:none;} }
+  .trivia-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(242,121,10,.12);color:var(--amber);border-radius:999px;padding:2px 7px;font-size:11px;font-weight:800;flex-shrink:0;}
+  .trivia-badge .icon{width:11px;height:11px;}
   .avatar-ph{width:32px;height:32px;border-radius:50%;border:2px solid var(--edge);background:var(--amber-deep);color:var(--amber-bright);display:flex;align-items:center;justify-content:center;font-family:'Lilita One',system-ui;font-size:15px;flex-shrink:0;}
   .rank{width:24px;text-align:center;color:var(--muted);font-size:14px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;}
   .crown{display:inline-flex;width:20px;height:20px;color:var(--amber);animation:crownBounce 1.6s ease-in-out infinite;filter:drop-shadow(0 2px 1px rgba(0,0,0,.3));}
@@ -151,6 +173,10 @@
   .shot{border:3px solid var(--edge);border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 4px 0 var(--edge);}
   .shot img{width:100%;display:block;aspect-ratio:3/4;object-fit:cover;}
   .shot .ts{font-size:10px;color:var(--muted);padding:4px 6px;text-align:center;font-weight:700;}
+  .reactions{display:flex;border-top:2px dashed var(--edge);}
+  .react-btn{flex:1;background:none;border:none;padding:6px 2px;font-size:12px;font-weight:700;color:var(--muted);}
+  .react-btn.active-up{color:var(--teal);background:rgba(0,180,160,.12);}
+  .react-btn.active-down{color:var(--danger);background:rgba(230,57,70,.12);}
   .modal{
     position:fixed;inset:0;background:var(--modal-scrim);display:flex;align-items:center;justify-content:center;
     z-index:50;padding:20px;
@@ -515,57 +541,282 @@ const photoCache = {};             // photoId -> base64 (fetched on demand)
 // password there instead of an answer unlocks admin mode, so it never
 // looks like a password field to anyone but the person who knows.
 const TRIVIA = [
-  {q:"What grain is most beer brewed from?", a:"barley"},
-  {q:"What plant gives beer its bitterness?", a:"hops"},
-  {q:"What single-celled organism turns sugar into alcohol?", a:"yeast"},
-  {q:"What's the term for beer served straight from the cask, unfiltered and uncarbonated?", a:"real ale"},
-  {q:"Which country brews Guinness?", a:"ireland"},
+  {q:"What grain is most beer brewed from?", a:"barley", sim:"wheat"},
+  {q:"What plant gives beer its bitterness?", a:"hops", sim:"malt"},
+  {q:"What single-celled organism turns sugar into alcohol?", a:"yeast", sim:"bacteria"},
+  {q:"What's the term for beer served straight from the cask, unfiltered and uncarbonated?", a:"real ale", sim:"craft lager"},
+  {q:"Which country brews Guinness?", a:"ireland", sim:"scotland"},
   {q:"What's the standard size of a UK pub pint, in fluid ounces?", a:"20"},
-  {q:"What colour is a classic English bitter?", a:"amber"},
-  {q:"Which German city is famous for Oktoberfest?", a:"munich"},
-  {q:"What's the name for a pub crawl in Australia?", a:"pub crawl"},
-  {q:"What spirit is a Moscow Mule made with?", a:"vodka"},
-  {q:"What fruit garnish is classic in a G&T?", a:"lime"},
-  {q:"What's the main spirit in a classic Martini?", a:"gin"},
-  {q:"What's the collective name for a pub's regulars?", a:"regulars"},
-  {q:"What card game is often played for pub money?", a:"poker"},
-  {q:"What's the fastest known human land animal?", a:"cheetah"},
-  {q:"What planet is known as the Red Planet?", a:"mars"},
+  {q:"What colour is a classic English bitter?", a:"amber", sim:"copper"},
+  {q:"Which German city is famous for Oktoberfest?", a:"munich", sim:"berlin"},
+  {q:"What's the name for a pub crawl in Australia?", a:"pub crawl", sim:"bar hop"},
+  {q:"What spirit is a Moscow Mule made with?", a:"vodka", sim:"gin"},
+  {q:"What fruit garnish is classic in a G&T?", a:"lime", sim:"lemon"},
+  {q:"What's the main spirit in a classic Martini?", a:"gin", sim:"vodka"},
+  {q:"What's the collective name for a pub's regulars?", a:"regulars", sim:"locals"},
+  {q:"What card game is often played for pub money?", a:"poker", sim:"blackjack"},
+  {q:"What's the fastest known human land animal?", a:"cheetah", sim:"leopard"},
+  {q:"What planet is known as the Red Planet?", a:"mars", sim:"venus"},
   {q:"How many strings does a standard guitar have?", a:"6"},
-  {q:"What's the capital of France?", a:"paris"},
-  {q:"What's the largest ocean on Earth?", a:"pacific"},
-  {q:"What metal is famously liquid at room temperature?", a:"mercury"},
+  {q:"What's the capital of France?", a:"paris", sim:"lyon"},
+  {q:"What's the largest ocean on Earth?", a:"pacific", sim:"atlantic"},
+  {q:"What metal is famously liquid at room temperature?", a:"mercury", sim:"lead"},
   {q:"How many players are on a football (soccer) team on the pitch?", a:"11"},
-  {q:"What's the currency of Japan?", a:"yen"},
-  {q:"Who painted the Mona Lisa?", a:"da vinci"},
-  {q:"What's the tallest mountain in the world?", a:"everest"},
+  {q:"What's the currency of Japan?", a:"yen", sim:"won"},
+  {q:"Who painted the Mona Lisa?", a:"da vinci", sim:"michelangelo"},
+  {q:"What's the tallest mountain in the world?", a:"everest", sim:"k2"},
   {q:"How many continents are there?", a:"7"},
-  {q:"What's the chemical symbol for gold?", a:"au"},
+  {q:"What's the chemical symbol for gold?", a:"au", sim:"ag"},
   {q:"What's the smallest prime number?", a:"2"},
-  {q:"What ocean liner sank in 1912?", a:"titanic"},
-  {q:"What's the longest river in the world?", a:"nile"},
+  {q:"What ocean liner sank in 1912?", a:"titanic", sim:"lusitania"},
+  {q:"What's the longest river in the world?", a:"nile", sim:"amazon"},
   {q:"How many legs does a spider have?", a:"8"},
-  {q:"What's the national sport of Japan?", a:"sumo"},
-  {q:"What's the hardest natural substance on Earth?", a:"diamond"},
-  {q:"What's the largest mammal on Earth?", a:"blue whale"},
+  {q:"What's the national sport of Japan?", a:"sumo", sim:"judo"},
+  {q:"What's the hardest natural substance on Earth?", a:"diamond", sim:"quartz"},
+  {q:"What's the largest mammal on Earth?", a:"blue whale", sim:"fin whale"},
   {q:"What's the freezing point of water in Celsius?", a:"0"},
   {q:"How many sides does a hexagon have?", a:"6"},
-  {q:"What instrument has 88 keys?", a:"piano"},
-  {q:"What's the capital of Cambodia?", a:"phnom penh"},
-  {q:"What temple complex is Cambodia most famous for?", a:"angkor wat"},
-  {q:"What's Cambodia's currency called?", a:"riel"},
-  {q:"What's the loudest land animal, relative to size?", a:"howler monkey"},
+  {q:"What instrument has 88 keys?", a:"piano", sim:"organ"},
+  {q:"What's the capital of Cambodia?", a:"phnom penh", sim:"siem reap"},
+  {q:"What temple complex is Cambodia most famous for?", a:"angkor wat", sim:"bayon temple"},
+  {q:"What's Cambodia's currency called?", a:"riel", sim:"baht"},
+  {q:"What's the loudest land animal, relative to size?", a:"howler monkey", sim:"hyena"},
   {q:"How many hearts does an octopus have?", a:"3"},
-  {q:"What's the only mammal capable of true flight?", a:"bat"},
-  {q:"What gas do plants absorb from the air?", a:"carbon dioxide"},
-  {q:"What's the biggest planet in our solar system?", a:"jupiter"},
-  {q:"What's the smallest country in the world?", a:"vatican city"},
+  {q:"What's the only mammal capable of true flight?", a:"bat", sim:"flying squirrel"},
+  {q:"What gas do plants absorb from the air?", a:"carbon dioxide", sim:"oxygen"},
+  {q:"What's the biggest planet in our solar system?", a:"jupiter", sim:"saturn"},
+  {q:"What's the smallest country in the world?", a:"vatican city", sim:"monaco"},
   {q:"How many bones are in the adult human body?", a:"206"},
-  {q:"What's the study of stars and space called?", a:"astronomy"},
-  {q:"What language has the most native speakers worldwide?", a:"mandarin"},
-  {q:"What was the first fully computer-animated feature film?", a:"toy story"},
-  {q:"What's the tallest species of penguin?", a:"emperor penguin"},
+  {q:"What's the study of stars and space called?", a:"astronomy", sim:"astrology"},
+  {q:"What language has the most native speakers worldwide?", a:"mandarin", sim:"spanish"},
+  {q:"What was the first fully computer-animated feature film?", a:"toy story", sim:"shrek"},
+  {q:"What's the tallest species of penguin?", a:"emperor penguin", sim:"king penguin"},
+  {q:"What spirit is traditionally used in a Mojito?", a:"rum", sim:"tequila"},
+  {q:"What spirit is the base of a classic Old Fashioned?", a:"whiskey", sim:"brandy"},
+  {q:"What's the main ingredient in traditional cider?", a:"apples", sim:"pears"},
+  {q:"What's the term for a beer that's been aged in a whiskey barrel?", a:"barrel-aged", sim:"cask-conditioned"},
+  {q:"What country is credited with inventing lager brewing?", a:"germany", sim:"belgium"},
+  {q:"What's the name for a pub's outdoor drinking area?", a:"beer garden", sim:"beer hall"},
+  {q:"What drink is traditionally served in a yard glass?", a:"beer", sim:"cider"},
+  {q:"What's the fizzy mixer in a classic gin fizz?", a:"soda water", sim:"tonic water"},
+  {q:"What fruit is a classic daiquiri made with?", a:"lime", sim:"lemon"},
+  {q:"What's the name for the foam on top of a beer?", a:"head", sim:"crown"},
+  {q:"What Belgian beer style is famously bottle-conditioned and monk-brewed?", a:"trappist", sim:"abbey"},
+  {q:"What's the traditional English pub game played by throwing metal rings?", a:"quoits", sim:"horseshoes"},
+  {q:"What card suit is the ace of spades part of?", a:"spades", sim:"clubs"},
+  {q:"What dice game is a pub classic involving bluffing?", a:"liar's dice", sim:"yahtzee"},
+  {q:"What's the name of the wooden board used in pub skittles?", a:"skittle alley", sim:"bowling lane"},
+  {q:"What sport uses a cue and a triangular rack of balls?", a:"pool", sim:"snooker"},
+  {q:"What's the maximum break in a single visit in snooker?", a:"147"},
+  {q:"How many red balls are on a snooker table at the start?", a:"15"},
+  {q:"What's the name for three darts thrown in one turn?", a:"a set" },
+  {q:"What number do you need to hit to win a standard game of darts from 501?", a:"0"},
+  {q:"What's the highest score possible with three darts?", a:"180"},
+  {q:"What continent is home to the most countries?", a:"africa", sim:"asia"},
+  {q:"What's the largest desert in the world?", a:"sahara", sim:"gobi"},
+  {q:"What's the smallest planet in our solar system?", a:"mercury", sim:"venus"},
+  {q:"What gas makes up most of Earth's atmosphere?", a:"nitrogen", sim:"oxygen"},
+  {q:"What's the fastest bird in the world?", a:"peregrine falcon", sim:"golden eagle"},
+  {q:"What's the largest species of shark?", a:"whale shark", sim:"great white shark"},
+  {q:"What's the tallest land animal?", a:"giraffe", sim:"elephant"},
+  {q:"What insect is known for its complex hive society and honey-making?", a:"bee", sim:"wasp"},
+  {q:"What's the study of insects called?", a:"entomology", sim:"ornithology"},
+  {q:"What's the strongest muscle in the human body, relative to its size?", a:"jaw", sim:"tongue"},
+  {q:"What organ pumps blood around the body?", a:"heart", sim:"liver"},
+  {q:"How many chambers does the human heart have?", a:"4"},
+  {q:"What's the largest organ in the human body?", a:"skin", sim:"liver"},
+  {q:"What vitamin does sunlight help your body produce?", a:"vitamin d", sim:"vitamin c"},
+  {q:"What's the world's most spoken second language?", a:"english", sim:"spanish"},
+  {q:"What country has the most time zones?", a:"france", sim:"russia"},
+  {q:"What's the driest continent on Earth?", a:"antarctica", sim:"the arctic"},
+  {q:"What's the world's longest wall, built to defend China?", a:"great wall of china", sim:"the grand canal"},
+  {q:"What ancient wonder still stands in Giza, Egypt?", a:"the pyramids", sim:"the sphinx"},
+  {q:"What's the currency of the United Kingdom?", a:"pound", sim:"euro"},
+  {q:"What's the currency used across most of the European Union?", a:"euro", sim:"dollar"},
+  {q:"What's the capital of Italy?", a:"rome", sim:"milan"},
+  {q:"What's the capital of Australia?", a:"canberra", sim:"sydney"},
+  {q:"What's the capital of Canada?", a:"ottawa", sim:"toronto"},
+  {q:"What's the capital of Germany?", a:"berlin", sim:"munich"},
+  {q:"What's the capital of Thailand?", a:"bangkok", sim:"chiang mai"},
+  {q:"What's the capital of Vietnam?", a:"hanoi", sim:"ho chi minh city"},
+  {q:"What's the largest country in the world by land area?", a:"russia", sim:"canada"},
+  {q:"What's the most populous country in the world?", a:"india", sim:"china"},
+  {q:"What ocean lies between America and Europe?", a:"atlantic", sim:"pacific"},
+  {q:"What's the name of the imaginary line that circles the Earth at zero degrees latitude?", a:"equator", sim:"prime meridian"},
+  {q:"What's the term for a word that reads the same backwards, like 'level'?", a:"palindrome", sim:"anagram"},
+  {q:"What's the plural of the word 'octopus' most dictionaries prefer?", a:"octopuses", sim:"octopi"},
+  {q:"What punctuation mark ends a question?", a:"question mark", sim:"exclamation mark"},
+  {q:"What's the first letter of the Greek alphabet?", a:"alpha", sim:"beta"},
+  {q:"What Shakespeare play features the line 'to be or not to be'?", a:"hamlet", sim:"macbeth"},
+  {q:"Who wrote the Harry Potter series?", a:"j.k. rowling", sim:"stephen king"},
+  {q:"What's the best-selling video game of all time?", a:"minecraft", sim:"fortnite"},
+  {q:"What company makes the PlayStation?", a:"sony", sim:"microsoft"},
+  {q:"What's the name of Mario's dinosaur companion?", a:"yoshi", sim:"toad"},
+  {q:"What plumber is Nintendo's most famous mascot?", a:"mario", sim:"luigi"},
+  {q:"What's the name of the wizarding school in Harry Potter?", a:"hogwarts", sim:"beauxbatons"},
+  {q:"What ring must be destroyed in Lord of the Rings?", a:"the one ring", sim:"excalibur"},
+  {q:"What's the name of the coffee shop in the show Friends?", a:"central perk", sim:"monk's cafe"},
+  {q:"What's the name of Homer Simpson's employer?", a:"springfield nuclear power plant", sim:"springfield elementary"},
+  {q:"What superhero is also known as the Dark Knight?", a:"batman", sim:"daredevil"},
+  {q:"What's Iron Man's real name?", a:"tony stark", sim:"bruce wayne"},
+  {q:"What year did the Berlin Wall fall?", a:"1989"},
+  {q:"What year did World War II end?", a:"1945"},
+  {q:"Who was the first President of the United States?", a:"george washington", sim:"thomas jefferson"},
+  {q:"What year did the Titanic sink?", a:"1912"},
+  {q:"What decade did the first man walk on the moon?", a:"1960s", sim:"1970s"},
+  {q:"What's the name of the first man to walk on the moon?", a:"neil armstrong", sim:"buzz aldrin"},
+  {q:"What ancient civilization built the Colosseum?", a:"romans", sim:"greeks"},
+  {q:"What's the name of the Egyptian writing system using pictures?", a:"hieroglyphics", sim:"cuneiform"},
+  {q:"What war was fought between the North and South in America in the 1860s?", a:"the civil war", sim:"the revolutionary war"},
+  {q:"What metal is a magnet most commonly made from?", a:"iron", sim:"nickel"},
+  {q:"What's the chemical formula for water?", a:"h2o", sim:"co2"},
+  {q:"What's the boiling point of water in Celsius?", a:"100"},
+  {q:"What force pulls objects toward the Earth?", a:"gravity", sim:"magnetism"},
+  {q:"What part of the plant conducts photosynthesis?", a:"leaves", sim:"roots"},
+  {q:"What blood type is known as the universal donor?", a:"o negative", sim:"o positive"},
+  {q:"What's the speed of light approximately, in km per second?", a:"300000"},
+  {q:"What scientist developed the theory of relativity?", a:"einstein", sim:"newton"},
+  {q:"What's the name for a baby kangaroo?", a:"joey", sim:"cub"},
+  {q:"What's the name for a baby cat?", a:"kitten", sim:"puppy"},
+  {q:"What's the collective noun for a group of lions?", a:"pride", sim:"pack"},
+  {q:"What's the collective noun for a group of crows?", a:"murder", sim:"flock"},
+  {q:"What animal is famous for never forgetting?", a:"elephant", sim:"dolphin"},
+  {q:"What's the tallest waterfall in the world?", a:"angel falls", sim:"niagara falls"},
+  {q:"What's the largest coral reef system in the world?", a:"great barrier reef", sim:"red sea reef"},
+  {q:"What sport is played at Wimbledon?", a:"tennis", sim:"badminton"},
+  {q:"How many players are on a rugby union team?", a:"15"},
+  {q:"What sport is known as 'the beautiful game'?", a:"football", sim:"rugby"},
+  {q:"What country hosted the 2016 Summer Olympics?", a:"brazil", sim:"argentina"},
+  {q:"How often are the Summer Olympics held, in years?", a:"4"},
+  {q:"What's the national drink of Scotland?", a:"whisky", sim:"gin"},
+  {q:"What cocktail is made with tequila, lime and triple sec?", a:"margarita", sim:"mojito"},
+  {q:"What's the term for a bartender in French-influenced English?", a:"barman", sim:"sommelier"},
 ];
+
+// Shuffled-bag question picker — deals through every question once before
+// any repeats, and never lets the new shuffle's first pick match the very
+// last question asked, so back-to-back repeats can't happen either way.
+let triviaBag = [];
+let lastTriviaQ = null;
+function nextTriviaQuestion(){
+  if (triviaBag.length === 0) {
+    triviaBag = TRIVIA.map((_, i) => i);
+    for (let i = triviaBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [triviaBag[i], triviaBag[j]] = [triviaBag[j], triviaBag[i]];
+    }
+    if (triviaBag.length > 1 && TRIVIA[triviaBag[triviaBag.length-1]] === lastTriviaQ) {
+      [triviaBag[0], triviaBag[triviaBag.length-1]] = [triviaBag[triviaBag.length-1], triviaBag[0]];
+    }
+  }
+  const q = TRIVIA[triviaBag.pop()];
+  lastTriviaQ = q;
+  return q;
+}
+
+// ---------- trivia ROUND game (multiple choice, played together as a night starts) ----------
+// One "close" wrong answer (hand-picked per question where possible, or a
+// nearby number for numeric answers) and one "left field" wrong answer
+// (borrowed from a totally unrelated question, so it never accidentally
+// looks plausible) round out the correct answer into 3 shuffled options.
+function similarDecoy(q){
+  if (q.sim) return q.sim;
+  if (/^-?\d+(\.\d+)?$/.test(q.a.trim())) {
+    const num = parseFloat(q.a);
+    const magnitude = Math.max(1, Math.round(Math.abs(num) * 0.15));
+    let offset = magnitude + Math.floor(Math.random()*magnitude) + 1;
+    if (Math.random() < 0.5 && num - offset >= 0) offset = -offset;
+    return String(Math.round(num + offset));
+  }
+  return leftFieldDecoy([q.a]);
+}
+function leftFieldDecoy(exclude){
+  const excludeLower = exclude.map(e => String(e).toLowerCase());
+  let tries = 0, pick;
+  do { pick = TRIVIA[Math.floor(Math.random()*TRIVIA.length)].a; tries++; }
+  while (excludeLower.includes(pick.toLowerCase()) && tries < 12);
+  return pick;
+}
+function generateTriviaRound(){
+  const q = nextTriviaQuestion();
+  const sim = similarDecoy(q);
+  const left = leftFieldDecoy([q.a, sim]);
+  const options = [q.a, sim, left];
+  for (let i = options.length - 1; i > 0; i--) {          // shuffle so the
+    const j = Math.floor(Math.random() * (i + 1));         // correct answer
+    [options[i], options[j]] = [options[j], options[i]];   // isn't always first
+  }
+  return { q: q.q, options, correctIndex: options.indexOf(q.a), picks: {}, revealed: false };
+}
+function renderTriviaRoundModal(){
+  const n = data.nights[view.nightId]; if(!n || !n.trivia) return;
+  const t = n.trivia;
+  const people = Object.values(n.people || {}).filter(p => !p.out);
+  let m = document.getElementById("triviaRoundModal");
+  if (!m) {
+    m = document.createElement("div");
+    m.id = "triviaRoundModal";
+    m.className = "modal"; m.style.flexDirection = "column";
+    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    document.body.appendChild(m);
+  }
+  const letters = ["A","B","C"];
+  m.innerHTML = `
+    <div class="card" style="max-width:420px;width:100%;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-family:'Lilita One',system-ui;font-size:15px;color:var(--amber);display:flex;align-items:center;gap:6px;"><svg class="icon"><use href="#icon-trophy"></use></svg> Trivia round</span>
+        <button class="ghost" id="trX" style="padding:5px 10px;font-size:12px;">Close</button>
+      </div>
+      <div style="color:var(--foam);font-size:15px;margin-bottom:12px;line-height:1.4;">${esc(t.q)}</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+        ${t.options.map((opt,i)=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:12px;border:2px solid ${t.revealed && i===t.correctIndex ? 'var(--teal)' : 'var(--edge)'};${t.revealed && i===t.correctIndex ? 'background:rgba(0,180,160,.12);' : ''}">
+            <span style="font-family:'Lilita One',system-ui;font-size:13px;width:20px;color:var(--muted);">${letters[i]}</span>
+            <span style="flex:1;font-size:14px;color:var(--foam);">${esc(opt)}</span>
+            ${t.revealed && i===t.correctIndex ? `<span style="color:var(--teal);font-size:13px;">✓</span>` : ""}
+          </div>`).join("")}
+      </div>
+      ${people.length===0 ? `<div class="hint" style="margin:0 0 14px;">Add some players first!</div>` : `
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;">
+        ${people.map(p=>{
+          const pick = t.picks[p.id];
+          const correct = t.revealed && pick === t.correctIndex;
+          const wrong = t.revealed && pick !== undefined && pick !== t.correctIndex;
+          return `
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;color:var(--foam);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">${esc(p.name)}${correct?' ✅':''}${wrong?' ❌':''}</span>
+            ${letters.map((l,i)=>`
+              <button ${t.revealed?'disabled':''} onclick="actions.pickTriviaOption('${p.id}',${i})"
+                style="width:30px;height:30px;border-radius:9px;border:2px solid var(--edge);font-family:'Lilita One',system-ui;font-size:12px;flex-shrink:0;
+                       background:${pick===i ? 'linear-gradient(180deg,var(--amber-bright),var(--amber))' : 'var(--card)'};
+                       color:${pick===i ? '#2B1400' : 'var(--muted)'};">${l}</button>`).join("")}
+          </div>`;
+        }).join("")}
+      </div>`}
+      ${t.revealed
+        ? `<button class="btn" id="trNext" style="width:100%;">Next round ▶</button>`
+        : `<button class="btn" id="trReveal" style="width:100%;">Show answer</button>`}
+    </div>`;
+  m.querySelector("#trX").onclick = ()=> m.remove();
+  const revealBtn = m.querySelector("#trReveal");
+  if (revealBtn) revealBtn.onclick = ()=> window.actions.revealTrivia();
+  const nextBtn = m.querySelector("#trNext");
+  if (nextBtn) nextBtn.onclick = ()=> window.actions.newTriviaRound();
+}
+function celebrateBigTrophy(name, score){
+  const m = document.createElement("div");
+  m.className = "modal"; m.style.flexDirection = "column";
+  m.innerHTML = `
+    <div class="card" style="text-align:center;max-width:320px;width:100%;">
+      <svg class="icon filled" style="width:72px;height:72px;color:var(--amber);margin-bottom:10px;filter:drop-shadow(0 4px 0 rgba(0,0,0,.25));"><use href="#icon-trophy"></use></svg>
+      <div style="font-family:'Lilita One',system-ui;font-size:20px;color:var(--amber);margin-bottom:4px;">🎉 ${esc(name)} hit ${score}!</div>
+      <div style="color:var(--foam);font-size:14px;margin-bottom:16px;">Trivia legend status unlocked — the counter resets and climbs again.</div>
+      <button class="btn" id="ctX" style="width:100%;">Nice!</button>
+    </div>`;
+  m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+  m.querySelector("#ctX").onclick = ()=> m.remove();
+  document.body.appendChild(m);
+}
 
 // ---------- roster: names remembered per room, reused across nights ----------
 // Each roster entry keeps the SAME id every night, so a person's drink
@@ -816,11 +1067,12 @@ function stopActiveStream(){
 function canUseInPageCamera(){
   return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.isSecureContext);
 }
-function openCameraModal(onDone){
+function openCameraModal(onDone, caption){
   const m = document.createElement("div");
   m.className = "modal"; m.style.flexDirection = "column";
   m.innerHTML = `
     <div class="card" style="padding:10px;max-width:420px;width:100%;">
+      ${caption ? `<div style="font-family:'Lilita One',system-ui;font-size:16px;color:var(--amber);text-align:center;margin:2px 0 10px;line-height:1.3;">${esc(caption)}</div>` : ""}
       <video id="camPreview" autoplay playsinline muted style="width:100%;border-radius:12px;background:#000;display:block;transform:scaleX(-1);"></video>
       <div style="display:flex;gap:10px;margin-top:12px;">
         <button class="ghost" id="camCancel" style="flex:1;">Cancel</button>
@@ -862,13 +1114,13 @@ function deliverToInput(input, file){
     showError("Couldn't attach that photo — try again.");
   }
 }
-function captureViaCamera(input){
+function captureViaCamera(input, caption){
   if (!canUseInPageCamera()) { input.click(); return; }   // old browser / http — original flow
   openCameraModal(file=>{
     if (file === undefined) { input.click(); return; }     // in-page camera failed — fall back
     if (!file) return;                                      // user cancelled — do nothing
     deliverToInput(input, file);
-  });
+  }, caption);
 }
 
 // ----- avatar upload (separate input so people can pick from their gallery too) -----
@@ -916,9 +1168,12 @@ function ensureAvatars(people){
     finally{ avatarFetching.delete(p.avatar); }
   })).then(()=> render());
 }
-const avatarHtml = (p) => p.avatar && photoCache[p.avatar]
-  ? `<img class="avatar" src="${photoCache[p.avatar]}" alt="">`
-  : `<span class="avatar-ph">${esc((p.name||"?").charAt(0).toUpperCase())}</span>`;
+const avatarHtml = (p) => {
+  const inner = p.avatar && photoCache[p.avatar]
+    ? `<img class="avatar" src="${photoCache[p.avatar]}" alt="">`
+    : `<span class="avatar-ph">${esc((p.name||"?").charAt(0).toUpperCase())}</span>`;
+  return `<button class="avatar-btn" aria-label="View ${esc(p.name||"")}'s photo" onclick="event.stopPropagation(); actions.viewAvatar('${p.id}')">${inner}</button>`;
+};
 
 
 function downloadDataUrl(dataUrl, name){
@@ -1143,7 +1398,11 @@ function computeStats(){
   const slowest = [...paceList].sort((a,b)=> b.avgGapMs-a.avgGapMs)[0] || null;    // longest gap between drinks
   const fastest = [...paceList].sort((a,b)=> a.avgGapMs-b.avgGapMs)[0] || null;    // shortest gap between drinks
 
-  return { top10, biggestNight, slowest, fastest, earliest, latest, totalDrinksAll, totalPhotos, nightsCount: nights.length, peopleCount: Object.keys(totals).length };
+  const triviaChamp = Object.values(data.roster || {})
+    .filter(r => (r.trivia||0) > 0)
+    .sort((a,b)=> (b.trivia||0) - (a.trivia||0))[0] || null;
+
+  return { top10, biggestNight, slowest, fastest, earliest, latest, totalDrinksAll, totalPhotos, nightsCount: nights.length, peopleCount: Object.keys(totals).length, triviaChamp };
 }
 
 // ---------- actions ----------
@@ -1151,7 +1410,7 @@ window.actions = {
   createNight(){
     const name = $("#nightName").value.trim() || "Untitled night";
     const id = uid();
-    data.nights[id] = { id, name, date:new Date().toISOString(), ended:false, people:{} };
+    data.nights[id] = { id, name, date:new Date().toISOString(), ended:false, people:{}, trivia: generateTriviaRound() };
     view = { page:"night", nightId:id, galleryPid:null };
     localStorage.setItem("beernight-lastnight-"+roomCode, id);
     saveData(); render();
@@ -1195,6 +1454,41 @@ window.actions = {
   },
   pickRoom(code){ joinRoom(code); },
   setHomeTab(tab){ homeTab = tab; render(); },
+  // ---- trivia ROUND game (public, multiplayer, no password) ----
+  openTriviaRound(){
+    const n = data.nights[view.nightId]; if(!n) return;
+    if (!n.trivia || n.trivia.revealed) { n.trivia = generateTriviaRound(); saveData(); }
+    renderTriviaRoundModal();
+  },
+  pickTriviaOption(pid, optIndex){
+    const n = data.nights[view.nightId]; if(!n || !n.trivia || n.trivia.revealed) return;
+    n.trivia.picks[pid] = optIndex;
+    saveData();
+    renderTriviaRoundModal();
+  },
+  revealTrivia(){
+    const n = data.nights[view.nightId]; if(!n || !n.trivia || n.trivia.revealed) return;
+    n.trivia.revealed = true;
+    const winners = [];
+    for (const [pid, optIndex] of Object.entries(n.trivia.picks)) {
+      if (optIndex !== n.trivia.correctIndex) continue;
+      if (!data.roster[pid]) continue;
+      const before = data.roster[pid].trivia || 0;
+      data.roster[pid].trivia = before + 1;
+      winners.push({ pid, name: data.roster[pid].name, score: before + 1, bigWin: (before + 1) % 10 === 0 });
+    }
+    saveData();
+    renderTriviaRoundModal();
+    render();
+    if (winners.length) window.AudioFX && window.AudioFX.fanfare();
+    winners.filter(w => w.bigWin).forEach(w => celebrateBigTrophy(w.name, w.score));
+  },
+  newTriviaRound(){
+    const n = data.nights[view.nightId]; if(!n) return;
+    n.trivia = generateTriviaRound();
+    saveData();
+    renderTriviaRoundModal();
+  },
   openTrivia(){
     const m = document.createElement("div");
     m.className = "modal"; m.style.flexDirection = "column";
@@ -1223,7 +1517,7 @@ window.actions = {
     }
 
     function askQuestion(){
-      const q = TRIVIA[Math.floor(Math.random()*TRIVIA.length)];
+      const q = nextTriviaQuestion();
       body.innerHTML = `
         <div style="color:var(--foam);font-size:15px;margin-bottom:14px;line-height:1.4;">${esc(q.q)}</div>
         <input id="triviaInput" placeholder="Your answer…" style="text-align:center;margin-bottom:10px;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
@@ -1392,6 +1686,46 @@ window.actions = {
     view = {page:"home",nightId:null,galleryPid:null};
     saveData(); render();
   },
+  selfie(pid){
+    const n = data.nights[view.nightId]; if(!n || n.ended) return;
+    const p = n.people?.[pid]; if(!p) return;
+    pendingAvatar = pid;
+    captureViaCamera(avInput, `Smile, ${p.name} — it's gonna be a good night 🍻`);
+  },
+  // Reactions are per-device, not per-person (there's no login for regular
+  // players) — localStorage just stops the SAME phone spamming the same
+  // photo over and over, and lets a tap toggle its own reaction off again.
+  react(pid, drinkId, dir){
+    const n = data.nights[view.nightId]; if(!n) return;
+    const p = n.people?.[pid]; if(!p) return;
+    const d = p.drinks?.[drinkId]; if(!d) return;
+    if (!d.reactions) d.reactions = { up:0, down:0 };
+    const mine = JSON.parse(localStorage.getItem("beernight-reacted") || "{}");
+    const prev = mine[drinkId];
+    if (prev === dir) {
+      d.reactions[dir] = Math.max(0, (d.reactions[dir]||0) - 1);
+      delete mine[drinkId];
+    } else {
+      if (prev) d.reactions[prev] = Math.max(0, (d.reactions[prev]||0) - 1);
+      d.reactions[dir] = (d.reactions[dir]||0) + 1;
+      mine[drinkId] = dir;
+    }
+    localStorage.setItem("beernight-reacted", JSON.stringify(mine));
+    saveData(); render();
+  },
+  viewAvatar(pid){
+    const person = data.nights[view.nightId]?.people?.[pid] || data.roster?.[pid];
+    if (!person || !person.avatar || !photoCache[person.avatar]) { toast("📷 No profile photo yet."); return; }
+    const b64 = photoCache[person.avatar];
+    const m = document.createElement("div");
+    m.className = "modal"; m.style.flexDirection = "column";
+    m.innerHTML = `
+      <img src="${b64}" alt="${esc(person.name||"")}'s profile photo">
+      <button class="ghost" id="avX" style="margin-top:14px;color:var(--foam);">Close</button>`;
+    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    m.querySelector("#avX").onclick = ()=> m.remove();
+    document.body.appendChild(m);
+  },
   async openGallery(pid){
     view.galleryPid = pid;
     render();               // renders placeholders first
@@ -1399,19 +1733,33 @@ window.actions = {
     render();               // then fills in images
   },
   closeGallery(){ view.galleryPid = null; render(); },
-  viewPhoto(id){
+  viewPhoto(id, pid){
     const b64 = photoCache[id]; if(!b64) return;
+    const n = data.nights[view.nightId];
+    const p = pid ? n?.people?.[pid] : null;
+    const isDrink = !!(p && p.drinks && p.drinks[id]);
+    const reactions = isDrink ? (p.drinks[id].reactions || {up:0,down:0}) : null;
+    const mine = isDrink ? (JSON.parse(localStorage.getItem("beernight-reacted") || "{}")[id]) : null;
     const m = document.createElement("div");
     m.className = "modal";
     m.style.flexDirection = "column";
     m.innerHTML = `
       <img src="${b64}" alt="Drink proof photo">
-      <div style="display:flex;gap:10px;margin-top:14px;">
+      ${isDrink ? `
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="ghost" id="phUp" style="flex:1;${mine==='up'?'color:var(--teal);border-color:var(--teal);':''}">👍 ${reactions.up||0}</button>
+        <button class="ghost" id="phDown" style="flex:1;${mine==='down'?'color:var(--danger);border-color:var(--danger);':''}">👎 ${reactions.down||0}</button>
+      </div>` : ""}
+      <div style="display:flex;gap:10px;margin-top:10px;">
         <button class="btn" id="phDl">⬇️ Download</button>
         <button class="btn" id="phSh">📤 Share</button>
         <button class="ghost" id="phX" style="color:var(--foam);">Close</button>
       </div>`;
     m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    if (isDrink) {
+      m.querySelector("#phUp").onclick = (e)=>{ e.stopPropagation(); m.remove(); window.actions.react(pid, id, "up"); };
+      m.querySelector("#phDown").onclick = (e)=>{ e.stopPropagation(); m.remove(); window.actions.react(pid, id, "down"); };
+    }
     m.querySelector("#phDl").onclick = (e)=>{ e.stopPropagation(); downloadDataUrl(b64, `beer-night-photo-${id}.jpg`); };
     m.querySelector("#phSh").onclick = async (e)=>{ e.stopPropagation(); await shareDataUrl(b64, `beer-night-photo-${id}.jpg`); };
     m.querySelector("#phX").onclick = (e)=>{ e.stopPropagation(); m.remove(); };
@@ -1495,6 +1843,7 @@ function renderHallOfFame(){
   if (s.fastest) tiles.push({icon:'siren', label:'FASTEST GULPER', value: esc(s.fastest.name), sub:`~${fmtGap(s.fastest.avgGapMs)} between beers`});
   if (s.latest) tiles.push({icon:'moon', label:'NIGHT OWL', value: esc(s.latest.name), sub:`logged one at ${timeLabel(s.latest.ts)}`});
   if (s.earliest) tiles.push({icon:'sunrise', label:'EARLY BIRD', value: esc(s.earliest.name), sub:`logged one at ${timeLabel(s.earliest.ts)}`});
+  if (s.triviaChamp) tiles.push({icon:'trophy', label:'BEST AT TRIVIA', value: esc(s.triviaChamp.name), sub:`${s.triviaChamp.trivia} correct answer${s.triviaChamp.trivia===1?'':'s'}`});
   tiles.push({icon:'camera', label:'PROOF PHOTOS', value: `${s.totalPhotos}`, sub:'taken for the archives'});
 
   return `
@@ -1567,7 +1916,7 @@ function render(){
       </div>
     </div>
     ${renderHallOfFame()}
-    <h2 class="section"><svg class="icon"><use href="#icon-trophy"></use></svg> Choose your night</h2>
+    <h2 class="section"><button onclick="actions.openTrivia()" aria-label="Trophy" style="background:none;border:none;padding:0;cursor:pointer;line-height:0;vertical-align:-3px;"><svg class="icon"><use href="#icon-trophy"></use></svg></button> Choose your night</h2>
     ${nights.length===0 ? `<div class="card muted-center">No nights yet. Start one above and add your friends.</div>` : ""}
     ${nights.map(n=>{
       const people = Object.values(n.people || {});
@@ -1976,9 +2325,10 @@ function renderNight(n){
     if (!p) { view.galleryPid = null; }
     else {
       const shots = [
-        ...drinksOf(p).map(([id,d])=>({ id, ts:d.ts, label: timeLabel(d.ts) })),
-        ...Object.entries(p.checkpoints || {}).map(([id,c])=>({ id, ts:c.ts, label: `🚨 ${c.milestone} · ${timeLabel(c.ts)}` })),
+        ...drinksOf(p).map(([id,d])=>({ id, ts:d.ts, label: timeLabel(d.ts), isDrink:true, reactions: d.reactions || {up:0,down:0} })),
+        ...Object.entries(p.checkpoints || {}).map(([id,c])=>({ id, ts:c.ts, label: `🚨 ${c.milestone} · ${timeLabel(c.ts)}`, isDrink:false })),
       ].sort((a,b)=> b.ts - a.ts);
+      const myReactions = JSON.parse(localStorage.getItem("beernight-reacted") || "{}");
       app.innerHTML = `
         <button class="back" onclick="actions.closeGallery()"><svg class="icon" style="transform:scaleX(-1);"><use href="#icon-chevron"></use></svg> Back to leaderboard</button>
         <div style="margin:6px 4px 4px;">
@@ -1988,11 +2338,18 @@ function renderNight(n){
         ${shots.length===0 ? `<div class="card muted-center" style="margin-top:12px;">No drinks logged yet.</div>` : `
         <div class="gallery">
           ${shots.map(s=>`
-            <div class="shot" onclick="actions.viewPhoto('${s.id}')">
-              ${photoCache[s.id]
-                ? `<img src="${photoCache[s.id]}" alt="Photo at ${s.label}">`
-                : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">loading…</div>`}
-              <div class="ts">${s.label}</div>
+            <div class="shot">
+              <div onclick="actions.viewPhoto('${s.id}','${p.id}')" style="cursor:pointer;">
+                ${photoCache[s.id]
+                  ? `<img src="${photoCache[s.id]}" alt="Photo at ${s.label}">`
+                  : `<div style="aspect-ratio:3/4;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;">loading…</div>`}
+                <div class="ts">${s.label}</div>
+              </div>
+              ${s.isDrink ? `
+              <div class="reactions">
+                <button class="react-btn ${myReactions[s.id]==='up'?'active-up':''}" onclick="actions.react('${p.id}','${s.id}','up')">👍 ${s.reactions.up||0}</button>
+                <button class="react-btn ${myReactions[s.id]==='down'?'active-down':''}" onclick="actions.react('${p.id}','${s.id}','down')">👎 ${s.reactions.down||0}</button>
+              </div>` : ""}
             </div>`).join("")}
         </div>`}`;
       return;
@@ -2009,6 +2366,11 @@ function renderNight(n){
       <h2 class="logo" role="button" aria-label="Rename this night" style="font-size:26px;margin:0;cursor:pointer;" onclick="actions.renameNight()">${esc(n.name)} <span style="font-size:14px;opacity:.5;">✏️</span></h2>
       <div class="night-meta">${dateLabel(n.date)}${n.ended ? " · finished" : ""} · 📸 photo + 3 min rule in force</div>
     </div>
+    ${n.ended ? "" : `
+    <button class="trivia-hover" onclick="actions.openTriviaRound()">
+      <svg class="icon filled"><use href="#icon-trophy"></use></svg>
+      ${n.trivia && !n.trivia.revealed ? "Trivia round in play — tap to answer!" : "Tap for a trivia round"}
+    </button>`}
     ${n.ended ? "" : `
     <div class="card" style="margin-bottom:16px;">
       <div class="row">
@@ -2043,8 +2405,10 @@ function renderNight(n){
             <span class="pname" role="button" style="cursor:pointer;"
                   aria-label="Options for ${esc(p.name)}"
                   onclick="actions.playerMenu('${p.id}')">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
+            ${(data.roster[p.id]?.trivia||0) > 0 ? `<span class="trivia-badge"><svg class="icon filled"><use href="#icon-trophy"></use></svg>${data.roster[p.id].trivia}</span>` : ""}
             <span class="pcount">${c}</span>
           </div>
+          ${n.ended ? "" : `<button class="selfie-btn" onclick="actions.selfie('${p.id}')"><svg class="icon"><use href="#icon-camera"></use></svg> Selfie mother****er</button>`}
           <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
             <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')"><svg class="icon"><use href="#icon-camera"></use></svg></button>
             ${n.ended ? "" : p.out ? `

@@ -1205,17 +1205,29 @@ function showMugShotConfirm(pid, b64){
 
 // fetch any avatars we haven't cached yet, then refresh once they're in
 const avatarFetching = new Set();
+const avatarMissing = new Set();   // photo ids confirmed NOT to exist — never retried again
 function ensureAvatars(people){
-  const missing = people.filter(p => p.avatar && !photoCache[p.avatar] && !avatarFetching.has(p.avatar));
+  const missing = people.filter(p => p.avatar && !photoCache[p.avatar] && !avatarFetching.has(p.avatar) && !avatarMissing.has(p.avatar));
   if (!missing.length) return;
   missing.forEach(p => avatarFetching.add(p.avatar));
+  let healed = false;
   Promise.all(missing.map(async (p)=>{
     try{
       const snap = await get(ref(db, `rooms/${roomCode}/photos/${p.avatar}`));
-      if (snap.exists()) photoCache[p.avatar] = snap.val();
+      if (snap.exists()) {
+        photoCache[p.avatar] = snap.val();
+      } else {
+        // Dangling reference — the photo's gone but something still points
+        // at it. Remember it as missing (stop retrying) and heal the
+        // reference itself so this doesn't keep coming back.
+        avatarMissing.add(p.avatar);
+        if (p.avatar === data.roster?.[p.id]?.avatar) delete data.roster[p.id].avatar;
+        delete p.avatar;
+        healed = true;
+      }
     }catch(e){}
     finally{ avatarFetching.delete(p.avatar); }
-  })).then(()=> render());
+  })).then(()=> { if (healed) saveData(); render(); });
 }
 const avatarHtml = (p) => {
   const inner = p.avatar && photoCache[p.avatar]

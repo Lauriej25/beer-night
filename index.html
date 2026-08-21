@@ -1129,11 +1129,13 @@ function captureViaCamera(input, caption){
 
 // ----- avatar upload (separate input so people can pick from their gallery too) -----
 const avInput = document.getElementById("avInput");
-let pendingAvatar = null;   // pid awaiting an avatar photo
+let pendingAvatar = null;       // pid awaiting an avatar photo
+let pendingAvatarMode = null;   // "direct" (player-menu Set Photo, saves instantly) | "selfie" (Yay/Nay confirm, one try per night)
 avInput.addEventListener("change", async ()=>{
   const file = avInput.files[0];
   avInput.value = "";
-  const pid = pendingAvatar; pendingAvatar = null;
+  const pid = pendingAvatar, mode = pendingAvatarMode;
+  pendingAvatar = null; pendingAvatarMode = null;
   if (!file || !pid) return;
   const n = data.nights[view.nightId];
   const p = n?.people?.[pid];
@@ -1141,22 +1143,65 @@ avInput.addEventListener("change", async ()=>{
   try{
     statusEl.textContent = "uploading photo…";
     const b64 = await compressImage(file, 240, 0.6);   // ~8–12 KB avatar
-    const newId = "av_" + uid();
-    await set(ref(db, `rooms/${roomCode}/photos/${newId}`), b64);
-    if (p.avatar) {
-      try{ await remove(ref(db, `rooms/${roomCode}/photos/${p.avatar}`)); }catch(e){}
-      delete photoCache[p.avatar];
+    if (mode === "selfie") {
+      statusEl.textContent = "room " + roomCode;
+      showMugShotConfirm(pid, b64);
+      return;
     }
-    p.avatar = newId;
-    upsertRoster(pid, p.name, newId);
-    photoCache[newId] = b64;
-    await saveData();
+    await commitAvatar(pid, b64);
     toast(`📷 Photo set for ${p.name}`);
   }catch(e){
     showError("Photo upload failed — try again.");
     statusEl.textContent = "room " + roomCode;
   }
 });
+async function commitAvatar(pid, b64){
+  const n = data.nights[view.nightId];
+  const p = n?.people?.[pid]; if (!p) return;
+  const newId = "av_" + uid();
+  await set(ref(db, `rooms/${roomCode}/photos/${newId}`), b64);
+  if (p.avatar) {
+    try{ await remove(ref(db, `rooms/${roomCode}/photos/${p.avatar}`)); }catch(e){}
+    delete photoCache[p.avatar];
+  }
+  p.avatar = newId;
+  upsertRoster(pid, p.name, newId);
+  photoCache[newId] = b64;
+  await saveData();
+}
+// The selfie button's one-attempt-per-night confirmation. No backdrop
+// dismiss on purpose — Nay is the intended way out, and it still spends
+// the night's one attempt, same as Yay. That's the whole point of the rule.
+function showMugShotConfirm(pid, b64){
+  const n = data.nights[view.nightId];
+  const p = n?.people?.[pid]; if (!p) return;
+  const m = document.createElement("div");
+  m.className = "modal"; m.style.flexDirection = "column";
+  m.innerHTML = `
+    <div class="card" style="max-width:360px;width:100%;text-align:center;">
+      <div style="font-family:'Lilita One',system-ui;font-size:18px;color:var(--amber);margin-bottom:10px;">📸 New mug shot</div>
+      <img src="${b64}" alt="New profile photo preview" style="width:100%;border-radius:14px;border:3px solid var(--edge);margin-bottom:14px;display:block;">
+      <div style="color:var(--muted);font-size:12px;font-weight:600;margin-bottom:12px;">One shot per night — choose wisely.</div>
+      <div style="display:flex;gap:10px;">
+        <button class="ghost danger" id="mugNay" style="flex:1;">Nay</button>
+        <button class="btn" id="mugYay" style="flex:1;">Yay!</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  m.querySelector("#mugYay").onclick = async ()=>{
+    m.remove();
+    p.selfieUsed = true;
+    try{ await commitAvatar(pid, b64); }catch(e){ showError("Photo upload failed — try again."); }
+    render();
+    toast(`📷 New mug shot locked in for ${p.name}!`);
+  };
+  m.querySelector("#mugNay").onclick = ()=>{
+    m.remove();
+    p.selfieUsed = true;
+    saveData(); render();
+    toast("🙅 Maybe next time");
+  };
+}
 
 // fetch any avatars we haven't cached yet, then refresh once they're in
 const avatarFetching = new Set();
@@ -1453,7 +1498,7 @@ window.actions = {
     const r = data.roster?.[rid]; if(!r) return;
     if(!n.people) n.people = {};
     if (n.people[rid]) { toast(`👋 ${r.name} is already in this night`); return; }
-    n.people[rid] = { id: rid, name: r.name, drinks:{} };
+    n.people[rid] = r.avatar ? { id: rid, name: r.name, avatar: r.avatar, drinks:{} } : { id: rid, name: r.name, drinks:{} };
     saveData(); render();
   },
   pickRoom(code){ joinRoom(code); },
@@ -1588,7 +1633,7 @@ window.actions = {
     m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
     const u = m.querySelector("#pmUndo");
     if (u) u.onclick = ()=>{ m.remove(); actions.undoDrink(pid); };
-    m.querySelector("#pmAv").onclick = ()=>{ m.remove(); pendingAvatar = pid; captureViaCamera(avInput); };
+    m.querySelector("#pmAv").onclick = ()=>{ m.remove(); pendingAvatar = pid; pendingAvatarMode = "direct"; captureViaCamera(avInput); };
     m.querySelector("#pmRen").onclick = ()=>{ m.remove(); actions.renamePerson(pid); };
     m.querySelector("#pmDel").onclick = ()=>{ m.remove(); actions.removePerson(pid); };
     m.querySelector("#pmX").onclick = ()=> m.remove();
@@ -1692,8 +1737,9 @@ window.actions = {
   },
   selfie(pid){
     const n = data.nights[view.nightId]; if(!n || n.ended) return;
-    const p = n.people?.[pid]; if(!p) return;
+    const p = n.people?.[pid]; if(!p || p.selfieUsed) return;
     pendingAvatar = pid;
+    pendingAvatarMode = "selfie";
     captureViaCamera(avInput, `Smile, ${p.name} — it's gonna be a good night 🍻`);
   },
   // Reactions are per-device, not per-person (there's no login for regular
@@ -2412,7 +2458,7 @@ function renderNight(n){
             ${(data.roster[p.id]?.trivia||0) > 0 ? `<span class="trivia-badge"><svg class="icon filled"><use href="#icon-trophy"></use></svg>${data.roster[p.id].trivia}</span>` : ""}
             <span class="pcount">${c}</span>
           </div>
-          ${n.ended ? "" : `<button class="selfie-btn" onclick="actions.selfie('${p.id}')"><svg class="icon"><use href="#icon-camera"></use></svg> Selfie mother****er</button>`}
+          ${n.ended || p.selfieUsed ? "" : `<button class="selfie-btn" onclick="actions.selfie('${p.id}')"><svg class="icon"><use href="#icon-camera"></use></svg> Selfie mother****er</button>`}
           <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;">
             <button class="cam" aria-label="View ${esc(p.name)}'s drink photos" onclick="actions.openGallery('${p.id}')"><svg class="icon"><use href="#icon-camera"></use></svg></button>
             ${n.ended ? "" : p.out ? `

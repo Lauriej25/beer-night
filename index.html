@@ -1175,13 +1175,14 @@ async function commitAvatar(pid, b64){
 function showMugShotConfirm(pid, b64){
   const n = data.nights[view.nightId];
   const p = n?.people?.[pid]; if (!p) return;
+  const hasRetry = !p.selfieRetried;
   const m = document.createElement("div");
   m.className = "modal"; m.style.flexDirection = "column";
   m.innerHTML = `
     <div class="card" style="max-width:360px;width:100%;text-align:center;">
       <div style="font-family:'Lilita One',system-ui;font-size:18px;color:var(--amber);margin-bottom:10px;">📸 New mug shot</div>
       <img src="${b64}" alt="New profile photo preview" style="width:100%;border-radius:14px;border:3px solid var(--edge);margin-bottom:14px;display:block;">
-      <div style="color:var(--muted);font-size:12px;font-weight:600;margin-bottom:12px;">One shot per night — choose wisely.</div>
+      <div style="color:var(--muted);font-size:12px;font-weight:600;margin-bottom:12px;">${hasRetry ? "Not feeling it? You get one retake." : "This is it — Yay or Nay is final."}</div>
       <div style="display:flex;gap:10px;">
         <button class="ghost danger" id="mugNay" style="flex:1;">Nay</button>
         <button class="btn" id="mugYay" style="flex:1;">Yay!</button>
@@ -1197,6 +1198,15 @@ function showMugShotConfirm(pid, b64){
   };
   m.querySelector("#mugNay").onclick = ()=>{
     m.remove();
+    if (hasRetry) {
+      p.selfieRetried = true;
+      saveData();
+      toast("😏 Try again — and actually smile this time!");
+      pendingAvatar = pid;
+      pendingAvatarMode = "selfie";
+      captureViaCamera(avInput, `Come on, ${p.name} — a REAL smile this time 🍻`);
+      return;
+    }
     p.selfieUsed = true;
     saveData(); render();
     toast("🙅 Maybe next time");

@@ -439,6 +439,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, set, get, remove } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const $ = (sel) => document.querySelector(sel);
 const app = $("#app");
@@ -458,20 +459,51 @@ const fmtGap = (ms) => {
 };
 
 // ---------- state ----------
-let db=null, roomCode=null, dataRef=null, unsubscribe=null;
+let db=null, auth=null, roomCode=null, dataRef=null, unsubscribe=null;
 let data = { nights: {}, roster: {} };
 let view = { page:"home", nightId:null, galleryPid:null };
 let homeTab = "top10";              // which tab the home-screen leaderboard shows
 let adminMode = localStorage.getItem("beernight-admin") === "1";   // unlocked via the trivia trophy easter egg
+// ---- REAL admin auth (do this for actual security) ----
+// 1. In the Firebase console: Authentication → Sign-in method → enable
+//    Email/Password.
+// 2. Authentication → Users → Add user → use the email below (it doesn't
+//    need to be a real inbox, Firebase just needs an email+password pair)
+//    and set the password to whatever you want your real admin password
+//    to be. It is stored by Firebase, never in this file.
+// 3. Change ADMIN_EMAIL below to match whatever you used.
+// 4. Update your Realtime Database security rules so deletes require
+//    auth.uid to match this account (see the note further down).
+// Once that's done, typing the real password in the trivia box signs
+// in via Firebase — verified on Google's servers, never checkable by
+// reading this file — and the ADMIN_PW_HASH fallback below stops
+// mattering (delete it once you've confirmed sign-in works).
+const ADMIN_EMAIL = "admin@beernight.local";
 // The admin password is never stored as plain text — only its SHA-256
 // hash is kept here, and the typed answer is hashed the same way before
-// comparing. This just stops the password being readable by scanning the
-// page source; see the note left with the trivia code for what this does
-// and doesn't protect against.
+// comparing. This is an INTERIM fallback only, used automatically if
+// Firebase Auth isn't set up yet. It stops the password being readable
+// by scanning the page source, but a hash can still be cracked offline —
+// once ADMIN_EMAIL above is live in Firebase, remove this constant and
+// the fallback branch in tryAdminUnlock() so this is the only path.
 const ADMIN_PW_HASH = "4cbe6cc75eef8c4894e26a8574ac160f9bbe1faf72991bc8e24a0138b20706c5";
 async function sha256Hex(text){
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
   return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function tryAdminUnlock(raw){
+  try{
+    await signInWithEmailAndPassword(auth, ADMIN_EMAIL, raw);
+    return true;   // verified server-side by Firebase — the real path
+  }catch(e){
+    // Auth isn't configured yet (steps 1–2 above not done) — fall back
+    // to the local hash check so nothing is broken in the meantime.
+    // Any other error (e.g. a genuinely wrong password) should NOT fall
+    // through, or a typo'd real password would silently retry as a hash.
+    const authNotSetUp = ["auth/operation-not-allowed","auth/user-not-found","auth/invalid-email","auth/configuration-not-found"].includes(e.code);
+    if (!authNotSetUp) return false;
+  }
+  return (await sha256Hex(raw)) === ADMIN_PW_HASH;
 }
 let pendingPhoto = null;           // {pid} while waiting for camera
 let tick = null;                   // cooldown countdown timer
@@ -573,6 +605,22 @@ else {
   try {
     const fbApp = initializeApp(firebaseConfig);
     db = getDatabase(fbApp);
+    auth = getAuth(fbApp);
+    // If Firebase Auth is set up (see the note by ADMIN_EMAIL below) and
+    // this browser has a live session, Firebase restores it automatically
+    // on load — this just keeps adminMode/the badge in sync with that.
+    // Only forces a re-render when admin status actually flips, since
+    // this can also refire on routine token refreshes.
+    let lastAdminState = null;
+    onAuthStateChanged(auth, (user)=>{
+      const next = !!(user && user.email === ADMIN_EMAIL);
+      localStorage.setItem("beernight-admin", next ? "1" : "0");
+      adminMode = next;
+      syncAdminBadge();
+      if (next === lastAdminState) return;
+      lastAdminState = next;
+      if (roomCode) render(); else renderRoomPicker();
+    });
     startRoomFlow();
   } catch(e) {
     showError("Firebase failed to start — double-check the config pasted into this file.");
@@ -1148,45 +1196,70 @@ window.actions = {
   pickRoom(code){ joinRoom(code); },
   setHomeTab(tab){ homeTab = tab; render(); },
   openTrivia(){
-    const q = TRIVIA[Math.floor(Math.random()*TRIVIA.length)];
     const m = document.createElement("div");
     m.className = "modal"; m.style.flexDirection = "column";
     m.innerHTML = `
       <div class="card" style="min-width:270px;max-width:90vw;text-align:center;">
         <svg class="icon" style="width:32px;height:32px;color:var(--amber);margin-bottom:6px;"><use href="#icon-trophy"></use></svg>
         <div style="font-family:'Lilita One',system-ui;font-size:17px;margin-bottom:12px;color:var(--foam);">🍻 Pub Trivia</div>
+        <div id="triviaBody"></div>
+      </div>`;
+    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    document.body.appendChild(m);
+    const body = m.querySelector("#triviaBody");
+
+    function showResult(message, ok, isUnlock){
+      body.innerHTML = `
+        <div style="font-family:'Lilita One',system-ui;font-size:16px;margin-bottom:16px;color:${ok?'var(--teal)':'var(--danger)'};line-height:1.35;">${message}</div>
+        <div style="display:flex;gap:8px;">
+          ${isUnlock
+            ? `<button class="btn" id="triviaClose" style="flex:1;">Nice</button>`
+            : `<button class="ghost" id="triviaClose" style="flex:1;">Close</button>
+               <button class="btn" id="triviaNext" style="flex:2;">Next question ▶</button>`}
+        </div>`;
+      const nextBtn = body.querySelector("#triviaNext");
+      if (nextBtn) nextBtn.onclick = askQuestion;
+      body.querySelector("#triviaClose").onclick = ()=> m.remove();
+    }
+
+    function askQuestion(){
+      const q = TRIVIA[Math.floor(Math.random()*TRIVIA.length)];
+      body.innerHTML = `
         <div style="color:var(--foam);font-size:15px;margin-bottom:14px;line-height:1.4;">${esc(q.q)}</div>
         <input id="triviaInput" placeholder="Your answer…" style="text-align:center;margin-bottom:10px;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
         <div style="display:flex;gap:8px;">
-          <button class="ghost" id="triviaX" style="flex:1;">Skip</button>
+          <button class="ghost" id="triviaX" style="flex:1;">Close</button>
           <button class="btn" id="triviaGo" style="flex:2;">Answer</button>
-        </div>
-      </div>`;
-    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
-    const input = m.querySelector("#triviaInput");
-    const submit = async ()=>{
-      const raw = input.value.trim();
-      m.remove();
-      if (!raw) return;
-      if (await sha256Hex(raw) === ADMIN_PW_HASH) {
-        adminMode = true;
-        localStorage.setItem("beernight-admin", "1");
-        toast("🔓 Admin mode unlocked");
-        render();
-        return;
-      }
-      const right = raw.toLowerCase() === q.a.toLowerCase();
-      toast(right ? "✅ Correct!" : `❌ Not quite — it was "${q.a}"`);
-    };
-    m.querySelector("#triviaGo").onclick = submit;
-    m.querySelector("#triviaX").onclick = ()=> m.remove();
-    input.onkeydown = (e)=> e.key==="Enter" && submit();
-    document.body.appendChild(m);
-    setTimeout(()=> input.focus(), 50);
+        </div>`;
+      const input = body.querySelector("#triviaInput");
+      const goBtn = body.querySelector("#triviaGo");
+      const submit = async ()=>{
+        const raw = input.value.trim();
+        if (!raw) return;
+        goBtn.disabled = true;
+        const unlocked = await tryAdminUnlock(raw);
+        if (unlocked) {
+          adminMode = true;
+          localStorage.setItem("beernight-admin", "1");
+          render();
+          showResult("🔓 Admin mode unlocked!", true, true);
+          return;
+        }
+        const right = raw.toLowerCase() === q.a.toLowerCase();
+        showResult(right ? "✅ Correct!" : `❌ Not quite — it was "${q.a}"`, right, false);
+      };
+      goBtn.onclick = submit;
+      body.querySelector("#triviaX").onclick = ()=> m.remove();
+      input.onkeydown = (e)=> e.key==="Enter" && submit();
+      setTimeout(()=> input.focus(), 50);
+    }
+
+    askQuestion();
   },
   exitAdmin(){
     adminMode = false;
     localStorage.removeItem("beernight-admin");
+    signOut(auth).catch(()=>{});   // no-op if only the interim hash path was used
     toast("🔒 Admin mode off");
     render();
   },

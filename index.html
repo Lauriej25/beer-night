@@ -420,6 +420,7 @@
   </h1>
   <div class="hdr-controls">
     <span id="status" class="status"></span>
+    <button class="toggle-btn" id="adminBadge" aria-label="Exit admin mode" title="Exit admin mode" onclick="actions.exitAdmin()" style="display:none;width:auto;padding:0 10px;color:var(--danger);border-color:var(--danger);font-family:'Lilita One',system-ui;font-size:11px;letter-spacing:.5px;">ADMIN</button>
     <button class="toggle-btn" id="soundToggle" aria-label="Toggle sound effects" title="Toggle sound effects">
       <svg class="icon"><use id="soundIconUse" href="#icon-speaker"></use></svg>
     </button>
@@ -461,9 +462,78 @@ let db=null, roomCode=null, dataRef=null, unsubscribe=null;
 let data = { nights: {}, roster: {} };
 let view = { page:"home", nightId:null, galleryPid:null };
 let homeTab = "top10";              // which tab the home-screen leaderboard shows
+let adminMode = localStorage.getItem("beernight-admin") === "1";   // unlocked via the trivia trophy easter egg
+// The admin password is never stored as plain text — only its SHA-256
+// hash is kept here, and the typed answer is hashed the same way before
+// comparing. This just stops the password being readable by scanning the
+// page source; see the note left with the trivia code for what this does
+// and doesn't protect against.
+const ADMIN_PW_HASH = "4cbe6cc75eef8c4894e26a8574ac160f9bbe1faf72991bc8e24a0138b20706c5";
+async function sha256Hex(text){
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
 let pendingPhoto = null;           // {pid} while waiting for camera
 let tick = null;                   // cooldown countdown timer
 const photoCache = {};             // photoId -> base64 (fetched on demand)
+
+// ---------- pub trivia (the trophy easter egg) ----------
+// A random question from this pool shows up in a plain "answer the
+// trivia" box — the real function of the box is that typing the admin
+// password there instead of an answer unlocks admin mode, so it never
+// looks like a password field to anyone but the person who knows.
+const TRIVIA = [
+  {q:"What grain is most beer brewed from?", a:"barley"},
+  {q:"What plant gives beer its bitterness?", a:"hops"},
+  {q:"What single-celled organism turns sugar into alcohol?", a:"yeast"},
+  {q:"What's the term for beer served straight from the cask, unfiltered and uncarbonated?", a:"real ale"},
+  {q:"Which country brews Guinness?", a:"ireland"},
+  {q:"What's the standard size of a UK pub pint, in fluid ounces?", a:"20"},
+  {q:"What colour is a classic English bitter?", a:"amber"},
+  {q:"Which German city is famous for Oktoberfest?", a:"munich"},
+  {q:"What's the name for a pub crawl in Australia?", a:"pub crawl"},
+  {q:"What spirit is a Moscow Mule made with?", a:"vodka"},
+  {q:"What fruit garnish is classic in a G&T?", a:"lime"},
+  {q:"What's the main spirit in a classic Martini?", a:"gin"},
+  {q:"What's the collective name for a pub's regulars?", a:"regulars"},
+  {q:"What card game is often played for pub money?", a:"poker"},
+  {q:"What's the fastest known human land animal?", a:"cheetah"},
+  {q:"What planet is known as the Red Planet?", a:"mars"},
+  {q:"How many strings does a standard guitar have?", a:"6"},
+  {q:"What's the capital of France?", a:"paris"},
+  {q:"What's the largest ocean on Earth?", a:"pacific"},
+  {q:"What metal is famously liquid at room temperature?", a:"mercury"},
+  {q:"How many players are on a football (soccer) team on the pitch?", a:"11"},
+  {q:"What's the currency of Japan?", a:"yen"},
+  {q:"Who painted the Mona Lisa?", a:"da vinci"},
+  {q:"What's the tallest mountain in the world?", a:"everest"},
+  {q:"How many continents are there?", a:"7"},
+  {q:"What's the chemical symbol for gold?", a:"au"},
+  {q:"What's the smallest prime number?", a:"2"},
+  {q:"What ocean liner sank in 1912?", a:"titanic"},
+  {q:"What's the longest river in the world?", a:"nile"},
+  {q:"How many legs does a spider have?", a:"8"},
+  {q:"What's the national sport of Japan?", a:"sumo"},
+  {q:"What's the hardest natural substance on Earth?", a:"diamond"},
+  {q:"What's the largest mammal on Earth?", a:"blue whale"},
+  {q:"What's the freezing point of water in Celsius?", a:"0"},
+  {q:"How many sides does a hexagon have?", a:"6"},
+  {q:"What instrument has 88 keys?", a:"piano"},
+  {q:"What's the capital of Cambodia?", a:"phnom penh"},
+  {q:"What temple complex is Cambodia most famous for?", a:"angkor wat"},
+  {q:"What's Cambodia's currency called?", a:"riel"},
+  {q:"What's the loudest land animal, relative to size?", a:"howler monkey"},
+  {q:"How many hearts does an octopus have?", a:"3"},
+  {q:"What's the only mammal capable of true flight?", a:"bat"},
+  {q:"What gas do plants absorb from the air?", a:"carbon dioxide"},
+  {q:"What's the biggest planet in our solar system?", a:"jupiter"},
+  {q:"What's the smallest country in the world?", a:"vatican city"},
+  {q:"How many bones are in the adult human body?", a:"206"},
+  {q:"What's the study of stars and space called?", a:"astronomy"},
+  {q:"What language has the most native speakers worldwide?", a:"mandarin"},
+  {q:"What was the first fully computer-animated feature film?", a:"toy story"},
+  {q:"What's the tallest species of penguin?", a:"emperor penguin"},
+];
 
 // ---------- roster: names remembered per room, reused across nights ----------
 // Each roster entry keeps the SAME id every night, so a person's drink
@@ -550,15 +620,22 @@ function startRoomFlow(){
 
 function renderRoomPicker(){
   statusEl.textContent = "";
+  syncAdminBadge();
   app.innerHTML = `
     <div style="text-align:center;margin:14px 0 20px;">
       <div style="display:flex;justify-content:center;gap:10px;color:var(--amber);">
         <svg class="icon filled" style="width:38px;height:38px;"><use href="#icon-mug"></use></svg>
-        <svg class="icon" style="width:38px;height:38px;color:var(--pink);"><use href="#icon-trophy"></use></svg>
+        <button onclick="actions.openTrivia()" aria-label="Trophy" style="background:none;border:none;padding:0;cursor:pointer;line-height:0;">
+          <svg class="icon" style="width:38px;height:38px;color:var(--pink);"><use href="#icon-trophy"></use></svg>
+        </button>
         <svg class="icon filled" style="width:38px;height:38px;"><use href="#icon-mug"></use></svg>
       </div>
       <div style="font-family:'Lilita One',system-ui;font-size:15px;color:var(--pink);letter-spacing:2px;margin-top:4px;">INSERT ROOM CODE TO PLAY</div>
     </div>
+    ${adminMode ? `<div class="card" style="border-color:var(--danger);margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;">
+      <span style="font-family:'Lilita One',system-ui;font-size:13px;color:var(--danger);letter-spacing:.5px;">🔓 ADMIN MODE</span>
+      <button class="ghost" onclick="actions.exitAdmin()" style="font-size:12px;padding:6px 12px;">Exit</button>
+    </div>` : ""}
     <div class="card">
       <h2 class="section" style="margin-top:0;"><svg class="icon"><use href="#icon-controller"></use></svg> Create a room</h2>
       <p style="color:var(--muted);font-size:14px;margin-top:0;font-weight:600;">Everyone in the same room shares the same live leaderboard.</p>
@@ -595,10 +672,13 @@ async function loadRoomList(){
     el.innerHTML = codes.map(c=>{
       const safe = String(c).replace(/[^A-Za-z0-9]/g,"");
       return `
-      <button class="night-row" onclick="actions.pickRoom('${safe}')">
+      <div class="night-row" style="cursor:pointer;" onclick="actions.pickRoom('${safe}')">
         <span class="night-name">🚪 ${esc(safe)}</span>
-        <span style="color:var(--amber);font-size:20px;">›</span>
-      </button>`;
+        <span style="display:flex;align-items:center;gap:10px;">
+          ${adminMode ? `<button class="cam" aria-label="Delete room ${esc(safe)}" onclick="event.stopPropagation(); actions.deleteRoom('${safe}')" style="width:38px;height:38px;color:var(--danger);border-color:var(--danger);"><svg class="icon"><use href="#icon-trash"></use></svg></button>` : ""}
+          <span style="color:var(--amber);font-size:20px;">›</span>
+        </span>
+      </div>`;
     }).join("");
   } catch(e) {
     const el2 = document.getElementById("roomList");
@@ -1067,6 +1147,58 @@ window.actions = {
   },
   pickRoom(code){ joinRoom(code); },
   setHomeTab(tab){ homeTab = tab; render(); },
+  openTrivia(){
+    const q = TRIVIA[Math.floor(Math.random()*TRIVIA.length)];
+    const m = document.createElement("div");
+    m.className = "modal"; m.style.flexDirection = "column";
+    m.innerHTML = `
+      <div class="card" style="min-width:270px;max-width:90vw;text-align:center;">
+        <svg class="icon" style="width:32px;height:32px;color:var(--amber);margin-bottom:6px;"><use href="#icon-trophy"></use></svg>
+        <div style="font-family:'Lilita One',system-ui;font-size:17px;margin-bottom:12px;color:var(--foam);">🍻 Pub Trivia</div>
+        <div style="color:var(--foam);font-size:15px;margin-bottom:14px;line-height:1.4;">${esc(q.q)}</div>
+        <input id="triviaInput" placeholder="Your answer…" style="text-align:center;margin-bottom:10px;" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div style="display:flex;gap:8px;">
+          <button class="ghost" id="triviaX" style="flex:1;">Skip</button>
+          <button class="btn" id="triviaGo" style="flex:2;">Answer</button>
+        </div>
+      </div>`;
+    m.addEventListener("click", (e)=>{ if (e.target === m) m.remove(); });
+    const input = m.querySelector("#triviaInput");
+    const submit = async ()=>{
+      const raw = input.value.trim();
+      m.remove();
+      if (!raw) return;
+      if (await sha256Hex(raw) === ADMIN_PW_HASH) {
+        adminMode = true;
+        localStorage.setItem("beernight-admin", "1");
+        toast("🔓 Admin mode unlocked");
+        render();
+        return;
+      }
+      const right = raw.toLowerCase() === q.a.toLowerCase();
+      toast(right ? "✅ Correct!" : `❌ Not quite — it was "${q.a}"`);
+    };
+    m.querySelector("#triviaGo").onclick = submit;
+    m.querySelector("#triviaX").onclick = ()=> m.remove();
+    input.onkeydown = (e)=> e.key==="Enter" && submit();
+    document.body.appendChild(m);
+    setTimeout(()=> input.focus(), 50);
+  },
+  exitAdmin(){
+    adminMode = false;
+    localStorage.removeItem("beernight-admin");
+    toast("🔒 Admin mode off");
+    render();
+  },
+  async deleteRoom(code){
+    if (!adminMode) return;
+    if (!confirm(`Admin: permanently delete room "${code}" and everything in it (all nights, all photos)? This can't be undone.`)) return;
+    try{
+      await remove(ref(db, `rooms/${code}`));
+      toast(`🗑 Room ${code} deleted`);
+      loadRoomList();
+    }catch(e){ showError("Couldn't delete that room — try again."); }
+  },
   playerMenu(pid){
     const n = data.nights[view.nightId]; if(!n) return;
     const p = n.people?.[pid]; if(!p) return;
@@ -1169,8 +1301,9 @@ window.actions = {
     saveData(); render();
   },
   deleteNight(){
+    if (!adminMode) return;
     const n = data.nights[view.nightId]; if(!n) return;
-    if (!confirm("Delete this night (and all its photos) for everyone in the room?")) return;
+    if (!confirm("Admin: delete this night (and all its photos) for everyone in the room? This can't be undone.")) return;
     for (const p of Object.values(n.people || {})) {
       for (const id of [...Object.keys(p.drinks || {}), ...Object.keys(p.checkpoints || {})]) {
         remove(ref(db, `rooms/${roomCode}/photos/${id}`)).catch(()=>{});
@@ -1308,9 +1441,15 @@ function renderHallOfFame(){
     </div>`;
 }
 
+function syncAdminBadge(){
+  const b = document.getElementById("adminBadge");
+  if (b) b.style.display = adminMode ? "flex" : "none";
+}
+
 function render(){
   if (!roomCode) return;
   clearInterval(tick);
+  syncAdminBadge();
   const nights = Object.values(data.nights || {}).sort((a,b)=> new Date(b.date)-new Date(a.date));
 
   if (view.page === "invite") return renderInvite();
@@ -1853,7 +1992,7 @@ function renderNight(n){
       ${n.ended ? `<button class="ghost" style="border-color:var(--amber);color:var(--amber);" onclick="actions.openRecap('${n.id}')"><svg class="icon"><use href="#icon-sunrise"></use></svg> Recap &amp; slideshows</button>` : ""}
       <button class="ghost" onclick="actions.showInvite()"><svg class="icon filled"><use href="#icon-mug"></use></svg> Invite QR</button>
       <button class="ghost" onclick="actions.toggleEnded()">${n.ended ? "Reopen night" : "End night"}</button>
-      <button class="ghost danger" onclick="actions.deleteNight()"><svg class="icon"><use href="#icon-trash"></use></svg> Delete</button>
+      ${adminMode ? `<button class="ghost danger" onclick="actions.deleteNight()"><svg class="icon"><use href="#icon-trash"></use></svg> Delete</button>` : ""}
     </div>
     <p class="hint">Every point needs a photo with your drink — tap +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Made a mistake? ↺ undoes the last drink. Tap a player's <b>name</b> for more options, including removing them from the night. Heading home early? Tap the flag to bow out with your score locked in — you can tap back in if you rally. Tap the camera icon to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
 

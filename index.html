@@ -145,6 +145,19 @@
   @media (prefers-reduced-motion:reduce){ .trivia-hover{animation:none;} }
   .trivia-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(242,121,10,.12);color:var(--amber);border-radius:999px;padding:2px 7px;font-size:11px;font-weight:800;flex-shrink:0;}
   .trivia-badge .icon{width:11px;height:11px;}
+  .fab-me{
+    position:fixed;right:18px;bottom:22px;z-index:40;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+    width:60px;height:60px;border-radius:50%;
+    background:linear-gradient(180deg,var(--teal),#00877A);color:#fff;border:3px solid var(--edge);
+    box-shadow:0 5px 0 #00544C, 0 10px 20px rgba(0,0,0,.3);
+    font-family:'Lilita One',system-ui;font-size:13px;
+    transition:transform .08s ease, box-shadow .08s ease;
+  }
+  .fab-me:active{transform:translateY(4px);box-shadow:0 1px 0 #00544C;}
+  .fab-me .icon{width:18px;height:18px;}
+  .fab-me.cooling{background:var(--edge);color:var(--muted);box-shadow:0 5px 0 rgba(0,0,0,.35);}
+  .fab-me-timer{font-size:12px;}
   .avatar-ph{width:32px;height:32px;border-radius:50%;border:2px solid var(--edge);background:var(--amber-deep);color:var(--amber-bright);display:flex;align-items:center;justify-content:center;font-family:'Lilita One',system-ui;font-size:15px;flex-shrink:0;}
   .rank{width:24px;text-align:center;color:var(--muted);font-size:14px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;}
   .crown{display:inline-flex;width:20px;height:20px;color:var(--amber);animation:crownBounce 1.6s ease-in-out infinite;filter:drop-shadow(0 2px 1px rgba(0,0,0,.3));}
@@ -188,6 +201,18 @@
   .carousel-dots{display:flex;justify-content:center;gap:5px;margin-bottom:10px;}
   .crsl-dot{width:6px;height:6px;border-radius:50%;background:var(--edge);opacity:.35;}
   .crsl-dot.active{background:var(--amber);opacity:1;}
+  .ss-viewport{
+    display:flex;gap:12px;width:100%;max-width:460px;
+    overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;scroll-padding-inline:11%;padding:0 11%;
+    scrollbar-width:none;
+  }
+  .ss-viewport::-webkit-scrollbar{display:none;}
+  .ss-slide{
+    flex:0 0 78%;scroll-snap-align:center;border-radius:16px;overflow:hidden;
+    border:3px solid var(--edge);aspect-ratio:3/4;background:#000;
+  }
+  #ssViewport .ss-slide img{width:100%;height:100%;object-fit:cover;display:block;user-select:none;-webkit-user-drag:none;}
   .modal{
     position:fixed;inset:0;background:var(--modal-scrim);display:flex;align-items:center;justify-content:center;
     z-index:50;padding:20px;
@@ -502,6 +527,11 @@ let data = { nights: {}, roster: {} };
 let view = { page:"home", nightId:null, galleryPid:null };
 let homeTab = "top10";              // which tab the home-screen leaderboard shows
 let adminMode = localStorage.getItem("beernight-admin") === "1";   // unlocked via the trivia trophy easter egg
+// This device's claimed identity for the CURRENT room — purely local
+// (localStorage), not an account or login. It's what lets the app say
+// "welcome back" and give you a shortcut to your own +1, without any
+// backend or notifications involved.
+let myProfileId = null;
 // ---- REAL admin auth (do this for actual security) ----
 // 1. In the Firebase console: Authentication → Sign-in method → enable
 //    Email/Password.
@@ -987,6 +1017,7 @@ async function loadRoomList(){
 function joinRoom(code, deepLinkNightId){
   roomCode = code;
   localStorage.setItem("beernight-room", code);
+  myProfileId = localStorage.getItem("beernight-myprofile-" + code) || null;
   if (unsubscribe) unsubscribe();
   // NOTE: scores live under /data — photos live separately under /photos
   // so the live listener never downloads image blobs.
@@ -1023,7 +1054,7 @@ function joinRoom(code, deepLinkNightId){
 function leaveRoom(){
   localStorage.removeItem("beernight-room");
   if (unsubscribe) unsubscribe();
-  roomCode=null; data={nights:{},roster:{}}; view={page:"home",nightId:null,galleryPid:null};
+  roomCode=null; data={nights:{},roster:{}}; view={page:"home",nightId:null,galleryPid:null}; myProfileId=null;
   renderRoomPicker();
 }
 
@@ -1623,6 +1654,19 @@ window.actions = {
 
     askQuestion();
   },
+  claimProfile(pid){
+    const p = data.roster?.[pid]; if (!p) return;
+    myProfileId = pid;
+    localStorage.setItem("beernight-myprofile-" + roomCode, pid);
+    render();
+    toast(`😎 This phone is now ${p.name}'s`);
+    window.AudioFX && window.AudioFX.chime();
+  },
+  unclaimProfile(){
+    myProfileId = null;
+    localStorage.removeItem("beernight-myprofile-" + roomCode);
+    render();
+  },
   exitAdmin(){
     adminMode = false;
     localStorage.removeItem("beernight-admin");
@@ -2083,6 +2127,8 @@ function render(){
   }
 
   app.innerHTML = `
+    ${myProfileId && data.roster[myProfileId] ? `
+    <div style="text-align:center;color:var(--muted);font-size:12px;font-weight:600;margin:0 0 10px;">👋 Welcome back, <b style="color:var(--foam);">${esc(data.roster[myProfileId].name)}</b> · <a href="javascript:void(0)" onclick="actions.unclaimProfile()" style="color:var(--amber);">not you?</a></div>` : ""}
     ${!localStorage.getItem("beernight-camok") ? `
     <button class="night-row" style="border-color:var(--amber);" onclick="actions.testCamera()">
       <span>
@@ -2220,26 +2266,69 @@ async function startSlideshow(nid, pid){
   const standings = Object.values(n.people || {}).sort((a,b)=>countOf(b)-countOf(a));
   const pos = standings.findIndex(x=>x.id===pid) + 1;
 
-  let i = 0;
+  let i = 0, autoTimer = null, settleTimer = null, programmatic = false;
   const m = document.createElement("div");
-  m.className = "modal";
-  m.style.flexDirection = "column";
+  m.className = "modal"; m.style.flexDirection = "column";
   m.innerHTML = `
-    <img id="ssImg" alt="Slideshow photo">
-    <div id="ssCap" style="color:var(--foam);margin-top:12px;font-family:'Lilita One',system-ui;font-size:17px;text-align:center;padding:0 16px;"></div>
+    <div class="ss-viewport" id="ssViewport">
+      ${shots.map(s=>`<div class="ss-slide"><img src="${photoCache[s.id]}" alt="Slideshow photo" draggable="false"></div>`).join("")}
+    </div>
+    ${shots.length>1 ? `<div class="carousel-dots" id="ssDots">${shots.map((_,idx)=>`<span class="crsl-dot ${idx===0?'active':''}"></span>`).join("")}</div>` : ""}
+    <div id="ssCap" style="color:var(--foam);margin-top:10px;font-family:'Lilita One',system-ui;font-size:17px;text-align:center;padding:0 16px;"></div>
     <div id="ssSub" style="color:var(--muted);font-size:13px;margin-top:6px;"></div>
-    <div style="color:var(--muted);font-size:12px;margin-top:10px;">tap anywhere to close</div>`;
-  const img = m.querySelector("#ssImg"), cap = m.querySelector("#ssCap"), sub = m.querySelector("#ssSub");
-  const show = ()=>{
+    <button class="ghost" id="ssClose" style="margin-top:14px;color:var(--foam);">Close</button>`;
+  document.body.appendChild(m);
+
+  const viewport = m.querySelector("#ssViewport");
+  const slides = m.querySelectorAll(".ss-slide");
+  const cap = m.querySelector("#ssCap"), sub = m.querySelector("#ssSub");
+  const dots = m.querySelectorAll(".crsl-dot");
+
+  const updateCaption = ()=>{
     const s = shots[i];
-    img.src = photoCache[s.id];
     cap.textContent = `${p.name} — ${pos}${posSuffix(pos)} place · ${countOf(p)} drinks 🍺`;
     sub.textContent = `photo ${i+1} of ${shots.length} · ${timeLabel(s.ts)}${s.tag}`;
+    dots.forEach((d,idx)=> d.classList.toggle("active", idx===i));
   };
-  show();
-  const t = setInterval(()=>{ i = (i+1) % shots.length; show(); }, 2500);
-  m.onclick = ()=>{ clearInterval(t); m.remove(); };
-  document.body.appendChild(m);
+  const goTo = (idx, smooth=true)=>{
+    i = ((idx % shots.length) + shots.length) % shots.length;
+    programmatic = true;
+    const slide = slides[i];
+    viewport.scrollTo({ left: slide.offsetLeft - (viewport.clientWidth - slide.clientWidth)/2, behavior: smooth ? "smooth" : "auto" });
+    updateCaption();
+    setTimeout(()=>{ programmatic = false; }, smooth ? 420 : 0);
+  };
+  const restartAuto = ()=>{
+    clearInterval(autoTimer);
+    if (shots.length > 1) autoTimer = setInterval(()=> goTo(i+1), 3200);
+  };
+  const stopAuto = ()=> clearInterval(autoTimer);
+
+  // native momentum-scroll drives the carousel; this just figures out
+  // which slide ended up centred once scrolling settles, and keeps the
+  // caption/dots in sync — same code path for swipes AND autoplay.
+  viewport.addEventListener("scroll", ()=>{
+    if (programmatic) return;
+    clearTimeout(settleTimer);
+    settleTimer = setTimeout(()=>{
+      const center = viewport.scrollLeft + viewport.clientWidth/2;
+      let best = 0, bestDist = Infinity;
+      slides.forEach((sl, idx)=>{
+        const dist = Math.abs((sl.offsetLeft + sl.clientWidth/2) - center);
+        if (dist < bestDist) { bestDist = dist; best = idx; }
+      });
+      i = best;
+      updateCaption();
+      restartAuto();
+    }, 120);
+  }, { passive:true });
+  viewport.addEventListener("pointerdown", stopAuto);
+
+  goTo(0, false);
+  restartAuto();
+
+  m.addEventListener("click", (e)=>{ if (e.target === m) { stopAuto(); m.remove(); } });
+  m.querySelector("#ssClose").onclick = ()=>{ stopAuto(); m.remove(); };
 }
 
 // ---------- beer QR invite (4 styles) ----------
@@ -2563,6 +2652,16 @@ function renderNight(n){
       <svg class="icon filled"><use href="#icon-trophy"></use></svg>
       ${n.trivia && !n.trivia.revealed ? "Trivia round in play — tap to answer!" : "Tap for a trivia round"}
     </button>`}
+    ${!n.ended && !myProfileId && people.length > 0 ? `
+    <div class="card" style="border-color:var(--teal);margin-bottom:16px;">
+      <div style="font-family:'Lilita One',system-ui;font-size:14px;color:var(--teal);margin-bottom:8px;">👋 Which one's you?</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${people.map(p=>`<button class="room-pill" onclick="actions.claimProfile('${p.id}')">${esc(p.name)}</button>`).join("")}
+      </div>
+      <div style="color:var(--muted);font-size:11px;margin-top:8px;">Linking this phone to your name gives you a quick +1 shortcut, no more scrolling to find yourself.</div>
+    </div>` : ""}
+    ${myProfileId && data.roster[myProfileId] ? `
+    <div style="text-align:center;color:var(--muted);font-size:12px;font-weight:600;margin:-6px 0 16px;">😎 This phone is <b style="color:var(--foam);">${esc(data.roster[myProfileId].name)}</b>'s · <a href="javascript:void(0)" onclick="actions.unclaimProfile()" style="color:var(--amber);">not you?</a></div>` : ""}
     ${n.ended ? "" : `
     <div class="card" style="margin-bottom:16px;">
       <div class="row">
@@ -2588,7 +2687,7 @@ function renderNight(n){
       const crown = i===0 && c>0;
       const left = cooldownLeft(p);
       return `
-      <div class="person" style="${p.out ? 'opacity:.55;' : ''}">
+      <div class="person" style="${p.out ? 'opacity:.55;' : ''}${p.id===myProfileId ? 'border-color:var(--teal);box-shadow:0 6px 0 var(--teal), 0 12px 22px rgba(0,180,160,.18);' : ''}">
         <div class="fill" style="width:${pct}%;${pct===0?'border-right:none;':''}" aria-hidden="true"></div>
         <div class="person-inner" style="flex-direction:column;align-items:stretch;gap:10px;">
           <div style="display:flex;align-items:center;gap:8px;min-width:0;">
@@ -2597,6 +2696,7 @@ function renderNight(n){
             <span class="pname" role="button" style="cursor:pointer;"
                   aria-label="Options for ${esc(p.name)}"
                   onclick="actions.playerMenu('${p.id}')">${esc(p.name)}${p.out ? ' 🏳️' : ''}</span>
+            ${p.id===myProfileId ? `<span class="trivia-badge" style="background:rgba(0,180,160,.15);color:var(--teal);">YOU</span>` : ""}
             ${(data.roster[p.id]?.trivia||0) > 0 ? `<span class="trivia-badge"><svg class="icon filled"><use href="#icon-trophy"></use></svg>${data.roster[p.id].trivia}</span>` : ""}
             <span class="pcount">${c}</span>
           </div>
@@ -2623,7 +2723,16 @@ function renderNight(n){
       <button class="ghost" onclick="actions.toggleEnded()">${n.ended ? "Reopen night" : "End night"}</button>
       ${adminMode ? `<button class="ghost danger" onclick="actions.deleteNight()"><svg class="icon"><use href="#icon-trash"></use></svg> Delete</button>` : ""}
     </div>
-    <p class="hint">Every point needs a photo with your drink — tap +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Made a mistake? ↺ undoes the last drink. Tap a player's <b>name</b> for more options, including removing them from the night. Heading home early? Tap the flag to bow out with your score locked in — you can tap back in if you rally. Tap the camera icon to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>`;
+    <p class="hint">Every point needs a photo with your drink — tap +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Made a mistake? ↺ undoes the last drink. Tap a player's <b>name</b> for more options, including removing them from the night. Heading home early? Tap the flag to bow out with your score locked in — you can tap back in if you rally. Tap the camera icon to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>
+    ${(() => {
+      if (n.ended || !myProfileId) return "";
+      const me = n.people?.[myProfileId];
+      if (!me || me.out) return "";
+      const left = cooldownLeft(me);
+      return `<button class="fab-me ${left>0?'cooling':''}" data-cd="${myProfileId}" ${left>0?'disabled':''} onclick="actions.requestDrink('${myProfileId}')" aria-label="Quick +1 for ${esc(me.name)}">
+        ${left>0 ? `<span class="fab-me-timer">${fmtLeft(left)}</span>` : `<svg class="icon"><use href="#icon-camera"></use></svg><span>+1</span>`}
+      </button>`;
+    })()}`;
 
   const pi = $("#personName");
   if (pi) pi.onkeydown = (e)=> e.key==="Enter" && actions.addPerson();
@@ -2632,17 +2741,29 @@ function renderNight(n){
   tick = setInterval(()=>{
     let anyCooling = false;
     for (const p of people) {
-      const btn = document.querySelector(`[data-cd="${p.id}"]`);
-      if (!btn) continue;
       const left = cooldownLeft(p);
-      if (left > 0) {
-        anyCooling = true;
-        btn.textContent = fmtLeft(left);
-        btn.disabled = true; btn.classList.add("cooling");
-      } else if (btn.disabled) {
-        btn.innerHTML = '<svg class="icon"><use href="#icon-camera"></use></svg> +1';
-        btn.disabled = false; btn.classList.remove("cooling");
-      }
+      const targets = document.querySelectorAll(`[data-cd="${p.id}"]`);
+      if (!targets.length) continue;
+      targets.forEach(btn => {
+        if (left > 0) {
+          anyCooling = true;
+          if (btn.classList.contains("fab-me")) {
+            const t = btn.querySelector(".fab-me-timer");
+            if (t) t.textContent = fmtLeft(left);
+            else btn.innerHTML = `<span class="fab-me-timer">${fmtLeft(left)}</span>`;
+          } else {
+            btn.textContent = fmtLeft(left);
+          }
+          btn.disabled = true; btn.classList.add("cooling");
+        } else if (btn.classList.contains("cooling")) {
+          if (btn.classList.contains("fab-me")) {
+            btn.innerHTML = '<svg class="icon"><use href="#icon-camera"></use></svg><span>+1</span>';
+          } else {
+            btn.innerHTML = '<svg class="icon"><use href="#icon-camera"></use></svg> +1';
+          }
+          btn.disabled = false; btn.classList.remove("cooling");
+        }
+      });
     }
     if (!anyCooling) clearInterval(tick);
   }, 1000);

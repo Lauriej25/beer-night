@@ -4,8 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Beer Night 🍻</title>
+<meta name="description" content="Track drinks, photos, and trivia with your crew — live, shared leaderboard.">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F2A81D">
+<!-- iOS doesn't read the manifest for "Add to Home Screen" — these do the same job there -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Beer Night">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<!-- No-op outside Telegram: this script only activates window.Telegram when
+     the page is actually opened inside the Telegram app. -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   /* ============================================================
      BEER NIGHT — ARCADE EDITION, two themes.
@@ -426,6 +438,7 @@
         localStorage.setItem(THEME_KEY, next);
         applyThemeIcon(next);
         window.AudioFX && window.AudioFX.click();
+        window.syncTelegramChrome && window.syncTelegramChrome();
       };
       const soundBtn = document.getElementById("soundToggle");
       if (soundBtn) soundBtn.onclick = () => {
@@ -483,6 +496,9 @@
   </h1>
   <div class="hdr-controls">
     <span id="status" class="status"></span>
+    <button class="toggle-btn" id="installBtn" aria-label="Install Beer Night as an app" title="Install as an app" onclick="window.triggerInstallPrompt()" style="display:none;color:var(--teal);border-color:var(--teal);">
+      <svg class="icon"><use href="#icon-download"></use></svg>
+    </button>
     <button class="toggle-btn" id="adminBadge" aria-label="Exit admin mode" title="Exit admin mode" onclick="actions.exitAdmin()" style="display:none;width:auto;padding:0 10px;color:var(--danger);border-color:var(--danger);font-family:'Lilita One',system-ui;font-size:11px;letter-spacing:.5px;">ADMIN</button>
     <button class="toggle-btn" id="soundToggle" aria-label="Toggle sound effects" title="Toggle sound effects">
       <svg class="icon"><use id="soundIconUse" href="#icon-speaker"></use></svg>
@@ -949,6 +965,7 @@ function startRoomFlow(){
 function renderRoomPicker(){
   statusEl.textContent = "";
   syncAdminBadge();
+  syncTelegramChrome();
   app.innerHTML = `
     <div style="text-align:center;margin:14px 0 20px;">
       <div style="display:flex;justify-content:center;gap:10px;color:var(--amber);">
@@ -1037,6 +1054,28 @@ function joinRoom(code, deepLinkNightId){
         // a shared QR/link pointed at a specific night — go straight there
         view = { page:"night", nightId:deepLinkNightId, galleryPid:null };
         localStorage.setItem("beernight-lastnight-" + code, deepLinkNightId);
+        // Opened via a shared QR/link while inside Telegram, and this phone
+        // hasn't claimed anyone yet — Telegram hands us a verified name for
+        // free, so skip the "which one's you" tap and just add them straight
+        // into the night they were invited to.
+        if (!myProfileId && typeof telegramDisplayName === "function") {
+          const tgName = telegramDisplayName();
+          if (tgName) {
+            const v = validateName(tgName);
+            if (v.ok) {
+              const n = data.nights[deepLinkNightId];
+              const match = findRosterByName(v.name);
+              const id = (match && n.people?.[match.id]) ? match.id : (match ? match.id : uid());
+              if (!n.people) n.people = {};
+              if (!n.people[id]) n.people[id] = { id, name: v.name, drinks:{} };
+              upsertRoster(id, v.name);
+              myProfileId = id;
+              localStorage.setItem("beernight-myprofile-" + code, id);
+              saveData();
+              setTimeout(()=> toast(`🎉 Welcome, ${v.name} — you're in!`), 300);
+            }
+          }
+        }
       } else {
         // if the app had to reload mid-night (e.g. the OS reclaimed the tab
         // while the camera app was open), jump straight back into that
@@ -1370,27 +1409,44 @@ camInput.addEventListener("change", async ()=>{
 // ---------- back-button protection ----------
 // The browser back button navigates WITHIN the app (photo → gallery → night → home).
 // Only when already on the home screen does it ask before actually leaving.
-history.pushState({ bn: 1 }, "");
-window.addEventListener("popstate", ()=>{
-  // if a photo/slideshow/menu overlay is open, back just closes it
+// Shared "go back one level" logic — used by the browser/hardware back
+// button below, AND by Telegram's own BackButton when running as a
+// Telegram Mini App (see the Telegram integration block near the bottom).
+function canGoBack(){
+  if (document.querySelector(".modal")) return true;
+  if (roomCode && view.page === "night" && view.galleryPid) return true;
+  if (roomCode && (view.page === "invite" || view.page === "recap")) return true;
+  if (roomCode && view.page === "night") return true;
+  return false;
+}
+function goBackOneLevel(){
   const modal = document.querySelector(".modal");
   if (modal) {
     modal.click();                       // triggers each modal's own close/cleanup
     if (document.body.contains(modal)) modal.remove();
-    history.pushState({ bn: 1 }, "");
     return;
   }
   if (roomCode && view.page === "night" && view.galleryPid) {
     view = { ...view, galleryPid: null };
     render();
-    history.pushState({ bn: 1 }, "");
-  } else if (roomCode && (view.page === "invite" || view.page === "recap")) {
+    return;
+  }
+  if (roomCode && (view.page === "invite" || view.page === "recap")) {
     view = { page: (view.nightId && data.nights?.[view.nightId]) ? "night" : "home", nightId: view.nightId, galleryPid: null };
     render();
-    history.pushState({ bn: 1 }, "");
-  } else if (roomCode && view.page === "night") {
+    return;
+  }
+  if (roomCode && view.page === "night") {
     view = { page: "home", nightId: null, galleryPid: null };
     render();
+    return;
+  }
+}
+
+history.pushState({ bn: 1 }, "");
+window.addEventListener("popstate", ()=>{
+  if (canGoBack()) {
+    goBackOneLevel();
     history.pushState({ bn: 1 }, "");
   } else {
     // at home (or no room): confirm before really leaving
@@ -1409,6 +1465,45 @@ window.addEventListener("beforeunload", (e)=>{
     e.returnValue = "";
   }
 });
+
+// ---------- Telegram Mini App integration ----------
+// Everything here is a no-op when the page isn't running inside Telegram
+// (window.Telegram.WebApp simply won't exist), so this is safe to ship in
+// the exact same file used as a normal website / installed PWA.
+const tg = window.Telegram?.WebApp || null;
+function syncTelegramChrome(){
+  if (!tg) return;
+  const theme = document.documentElement.getAttribute("data-theme");
+  try{
+    if (theme === "bright") {
+      tg.setHeaderColor("#FFE3A6");
+      tg.setBackgroundColor("#FFF7E6");
+    } else {
+      tg.setHeaderColor("#170F09");
+      tg.setBackgroundColor("#100A06");
+    }
+  }catch(e){}
+  // ask before closing while a live (unended) night is open — same
+  // condition the beforeunload warning below uses for the regular web case
+  const n = view.nightId ? data.nights?.[view.nightId] : null;
+  const liveNight = !!(roomCode && view.page === "night" && n && !n.ended);
+  try{ liveNight ? tg.enableClosingConfirmation() : tg.disableClosingConfirmation(); }catch(e){}
+  if (tg.BackButton) { canGoBack() ? tg.BackButton.show() : tg.BackButton.hide(); }
+}
+window.syncTelegramChrome = syncTelegramChrome;   // called after theme toggles too
+// Telegram hands us a verified display name for free — worth using to make
+// the existing "which one's you" profile claim smoother when it's a clean
+// match, instead of always showing the full generic chip list first.
+function telegramDisplayName(){
+  const u = tg?.initDataUnsafe?.user;
+  return u?.first_name || null;
+}
+if (tg) {
+  tg.ready();
+  tg.expand();
+  if (tg.BackButton) tg.BackButton.onClick(goBackOneLevel);
+  syncTelegramChrome();
+}
 
 // ---------- helpers ----------
 const hasCheckpoint = (p, milestone) =>
@@ -1661,6 +1756,21 @@ window.actions = {
     render();
     toast(`😎 This phone is now ${p.name}'s`);
     window.AudioFX && window.AudioFX.chime();
+  },
+  addMeViaTelegram(){
+    const name = telegramDisplayName();
+    if (!name) return;
+    const n = data.nights[view.nightId]; if (!n || n.ended) return;
+    const v = validateName(name);
+    if (!v.ok) return;
+    const match = findRosterByName(v.name);
+    if (match) { window.actions.claimProfile(match.id); return; }
+    if (!n.people) n.people = {};
+    const id = uid();
+    n.people[id] = { id, name: v.name, drinks:{} };
+    upsertRoster(id, v.name);
+    saveData();
+    window.actions.claimProfile(id);
   },
   unclaimProfile(){
     myProfileId = null;
@@ -2107,6 +2217,7 @@ function render(){
   if (!roomCode) return;
   clearInterval(tick);
   syncAdminBadge();
+  syncTelegramChrome();
   const nights = Object.values(data.nights || {}).sort((a,b)=> new Date(b.date)-new Date(a.date));
 
   if (view.page === "invite") return renderInvite();
@@ -2652,11 +2763,26 @@ function renderNight(n){
       <svg class="icon filled"><use href="#icon-trophy"></use></svg>
       ${n.trivia && !n.trivia.revealed ? "Trivia round in play — tap to answer!" : "Tap for a trivia round"}
     </button>`}
-    ${!n.ended && !myProfileId && people.length > 0 ? `
+    ${!n.ended && !myProfileId ? `
     <div class="card" style="border-color:var(--teal);margin-bottom:16px;">
-      <div style="font-family:'Lilita One',system-ui;font-size:14px;color:var(--teal);margin-bottom:8px;">👋 Which one's you?</div>
+      <div style="font-family:'Lilita One',system-ui;font-size:14px;color:var(--teal);margin-bottom:8px;">
+        ${(() => {
+          const tgName = telegramDisplayName();
+          const match = tgName ? findRosterByName(tgName) : null;
+          if (tgName && match && people.some(p=>p.id===match.id)) return `👋 Hey ${esc(tgName)}, that you?`;
+          if (people.length === 0) return "🎉 Be the first to join!";
+          return "👋 Which one's you?";
+        })()}
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;">
-        ${people.map(p=>`<button class="room-pill" onclick="actions.claimProfile('${p.id}')">${esc(p.name)}</button>`).join("")}
+        ${(() => {
+          const tgName = telegramDisplayName();
+          const match = tgName ? findRosterByName(tgName) : null;
+          const chips = people.map(p=>`<button class="room-pill" style="${match && p.id===match.id ? 'background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700;' : ''}" onclick="actions.claimProfile('${p.id}')">${esc(p.name)}</button>`);
+          if (tgName && !match) chips.unshift(`<button class="room-pill" style="background:var(--teal);color:#fff;border-color:var(--teal);font-weight:700;" onclick="actions.addMeViaTelegram()">+ Add me as ${esc(tgName)}</button>`);
+          if (!tgName && people.length === 0) return `<span style="color:var(--muted);font-size:12px;">Pop your name in the "Add a friend" box below ↓</span>`;
+          return chips.join("");
+        })()}
       </div>
       <div style="color:var(--muted);font-size:11px;margin-top:8px;">Linking this phone to your name gives you a quick +1 shortcut, no more scrolling to find yourself.</div>
     </div>` : ""}
@@ -2768,6 +2894,34 @@ function renderNight(n){
     if (!anyCooling) clearInterval(tick);
   }, 1000);
 }
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("service-worker.js").catch(() => {});
+    });
+  }
+  // Chrome/Android fires this when the app qualifies for installation —
+  // capture it so a real "Install app" button can trigger the native
+  // prompt on demand, instead of only relying on the browser's own menu.
+  let deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = document.getElementById("installBtn");
+    if (btn) btn.style.display = "flex";
+  });
+  window.addEventListener("appinstalled", () => {
+    deferredInstallPrompt = null;
+    const btn = document.getElementById("installBtn");
+    if (btn) btn.style.display = "none";
+  });
+  window.triggerInstallPrompt = async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+  };
 </script>
 </body>
 </html>

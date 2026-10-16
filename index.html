@@ -563,6 +563,10 @@ app.addEventListener("click", event=>{
 
 // ---------- state ----------
 let db=null, auth=null, roomCode=null, dataRef=null, unsubscribe=null;
+// Declared up here (not next to the Telegram helpers) because the startup
+// code below calls syncTelegramChrome() right away — reading `tg` before
+// its line ran threw an error that showed up as "Firebase failed to start".
+const tg = window.Telegram?.WebApp || null;
 let data = { nights: {}, roster: {} };
 let view = { page:"home", nightId:null, galleryPid:null };
 let homeTab = "top10";              // which tab the home-screen leaderboard shows
@@ -1501,7 +1505,7 @@ window.addEventListener("beforeunload", (e)=>{
 // Everything here is a no-op when the page isn't running inside Telegram
 // (window.Telegram.WebApp simply won't exist), so this is safe to ship in
 // the exact same file used as a normal website / installed PWA.
-const tg = window.Telegram?.WebApp || null;
+// (tg is declared near the top of the script, before startup code runs)
 function syncTelegramChrome(){
   if (!tg) return;
   const theme = document.documentElement.getAttribute("data-theme");

@@ -1569,6 +1569,10 @@ function showCheckpointPrompt(pid, milestone){
 
 const drinksOf = (p) => Object.entries(p.drinks || {}).sort((a,b)=>a[1].ts-b[1].ts);
 const countOf = (p) => Object.keys(p.drinks || {}).length;
+// A player's score for one night = drinks + trivia answers they got right
+// that night. Drink-only rules (cooldown, 10-beer checkpoints, photo
+// counts, all-time Hall of Fame drink totals) still use countOf().
+const scoreOf = (p, n) => countOf(p) + ((n && n.triviaScores && n.triviaScores[p.id]) || 0);
 const latestDrinkTs = (p) => {
   const d = drinksOf(p);
   return d.length ? d[d.length-1][1].ts : null;
@@ -1921,7 +1925,7 @@ window.actions = {
     const p = n.people?.[pid]; if(!p) return;
     p.out = !p.out;
     saveData(); render();
-    toast(p.out ? `🏳️ ${p.name} taps out — score locked at ${countOf(p)}` : `🍺 ${p.name} is back in!`);
+    toast(p.out ? `🏳️ ${p.name} taps out — score locked at ${scoreOf(p, n)}` : `🍺 ${p.name} is back in!`);
   },
   requestDrink(pid){
     const n = data.nights[view.nightId]; if(!n || n.ended) return;
@@ -2348,12 +2352,12 @@ function renderNow(){
     ${nights.map(n=>{
       const people = Object.values(n.people || {});
       const total = people.reduce((s,p)=>s+countOf(p),0);
-      const leader = [...people].sort((a,b)=>countOf(b)-countOf(a))[0];
+      const leader = [...people].sort((a,b)=>scoreOf(b,n)-scoreOf(a,n))[0];
       return `
       <button class="night-row" onclick="actions.openNight('${n.id}')">
         <span>
           <span class="night-name">${esc(n.name)}${n.ended ? "" : '<span class="live">LIVE</span>'}</span>
-          <span class="night-meta" style="display:block;">${dateLabel(n.date)} · ${people.length} ${people.length===1?"person":"people"} · ${total} drinks${leader && countOf(leader)>0 ? " · 👑 "+esc(leader.name) : ""}</span>
+          <span class="night-meta" style="display:block;">${dateLabel(n.date)} · ${people.length} ${people.length===1?"person":"people"} · ${total} drinks${leader && scoreOf(leader,n)>0 ? " · 👑 "+esc(leader.name) : ""}</span>
         </span>
         <span style="color:var(--amber);font-size:20px;">›</span>
       </button>`;
@@ -2397,7 +2401,7 @@ const posSuffix = (pos) => {
 function renderRecap(nid){
   const n = data.nights[nid];
   if (!n) { view = { page:"home", nightId:null, galleryPid:null }; return render(); }
-  const people = Object.values(n.people || {}).sort((a,b)=> countOf(b)-countOf(a) || a.name.localeCompare(b.name));
+  const people = Object.values(n.people || {}).sort((a,b)=> scoreOf(b,n)-scoreOf(a,n) || a.name.localeCompare(b.name));
   ensureAvatars(people);
   const medalColors = ["#FFD24A","#D6D9E0","#E0A45E"];
   app.innerHTML = `
@@ -2412,7 +2416,7 @@ function renderRecap(nid){
           <svg class="icon" style="width:26px;height:26px;color:${medalColors[i]};flex-shrink:0;"><use href="#icon-medal"></use></svg>
           ${avatarHtml(p)}
           <span class="pname">${esc(p.name)}</span>
-          <span class="pcount">${countOf(p)}</span>
+          <span class="pcount">${scoreOf(p,n)}</span>
         </div>
       </div>`).join("")}
     ${people.length>3 ? `
@@ -2420,7 +2424,7 @@ function renderRecap(nid){
         ${people.slice(3).map((p,i)=>`
           <div style="display:flex;justify-content:space-between;padding:7px 0;">
             <span><span style="color:var(--muted);">${i+4}.</span> ${esc(p.name)}</span>
-            <span style="color:var(--amber);font-family:'Lilita One',system-ui;">${countOf(p)}</span>
+            <span style="color:var(--amber);font-family:'Lilita One',system-ui;">${scoreOf(p,n)}</span>
           </div>`).join("")}
       </div>` : ""}
     <h2 class="section">📽️ Relive the night</h2>
@@ -2449,7 +2453,7 @@ async function startSlideshow(nid, pid){
     ...Object.entries(p.checkpoints || {}).map(([id,c])=>({ id, ts:c.ts, tag:` · 🚨 ${c.milestone}-beer checkpoint` })),
   ].sort((a,b)=> a.ts - b.ts).filter(s=>photoCache[s.id]);
   if (!shots.length) { toast("No photos found for " + p.name); return; }
-  const standings = Object.values(n.people || {}).sort((a,b)=>countOf(b)-countOf(a));
+  const standings = Object.values(n.people || {}).sort((a,b)=>scoreOf(b,n)-scoreOf(a,n));
   const pos = standings.findIndex(x=>x.id===pid) + 1;
 
   let i = 0, autoTimer = null, settleTimer = null, programmatic = false;
@@ -2828,8 +2832,8 @@ function renderNight(n){
     }
   }
 
-  const people = Object.values(n.people || {}).sort((a,b)=> countOf(b)-countOf(a) || a.name.localeCompare(b.name));
-  const max = Math.max(1, ...people.map(countOf));
+  const people = Object.values(n.people || {}).sort((a,b)=> scoreOf(b,n)-scoreOf(a,n) || a.name.localeCompare(b.name));
+  const max = Math.max(1, ...people.map(p=>scoreOf(p,n)));
   ensureAvatars(people);
 
   app.innerHTML = `
@@ -2888,7 +2892,7 @@ function renderNight(n){
     </div>`}
     ${people.length===0 ? `<div class="card muted-center">Add your friends above — first sip starts the race.</div>` : ""}
     ${people.map((p,i)=>{
-      const c = countOf(p);
+      const c = scoreOf(p, n);
       const pct = c===0 ? 0 : Math.max(8,(c/max)*100);
       const crown = i===0 && c>0;
       const left = cooldownLeft(p);
@@ -2929,7 +2933,7 @@ function renderNight(n){
       <button class="ghost" onclick="actions.toggleEnded()">${n.ended ? "Reopen night" : "End night"}</button>
       ${adminMode ? `<button class="ghost danger" onclick="actions.deleteNight()"><svg class="icon"><use href="#icon-trash"></use></svg> Delete</button>` : ""}
     </div>
-    <p class="hint">Every point needs a photo with your drink — tap +1 and smile. After each drink there's a 3-minute cooldown before the next one counts. Made a mistake? ↺ undoes the last drink. Tap a player's <b>name</b> for more options, including removing them from the night. Heading home early? Tap the flag to bow out with your score locked in — you can tap back in if you rally. Tap the camera icon to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>
+    <p class="hint">Every drink point needs a photo with your drink — tap +1 and smile. Each trivia answer you get right is worth a point too. After each drink there's a 3-minute cooldown before the next one counts. Made a mistake? ↺ undoes the last drink. Tap a player's <b>name</b> for more options, including removing them from the night. Heading home early? Tap the flag to bow out with your score locked in — you can tap back in if you rally. Tap the camera icon to browse anyone's proof gallery. Everyone in room ${esc(roomCode)} shares this board. Drink responsibly and look after each other. 🍻</p>
     ${(() => {
       if (n.ended || !myProfileId) return "";
       const me = n.people?.[myProfileId];

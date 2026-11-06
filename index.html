@@ -193,7 +193,13 @@
     </svg>
     Beer Night
   </h1>
-  <span id="status" class="status"></span>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button id="quizHeaderBtn" onclick="actions.openQuizFromHeader()"
+            style="display:none;background:var(--amber);border:none;border-radius:12px;padding:8px 14px;font-family:'Lilita One',system-ui;font-size:15px;color:#241300;cursor:pointer;letter-spacing:.3px;">
+      🧠 Quiz
+    </button>
+    <span id="status" class="status"></span>
+  </div>
 </header>
 
 <div id="errorBar" class="error" style="display:none;"></div>
@@ -888,6 +894,17 @@ window.actions = {
 
   // ---- quiz actions ----
   openQuiz(nightId){ showQuizCategoryPicker(nightId); },
+  openQuizFromHeader(){
+    // Works from anywhere — uses the currently active live night
+    if (view.nightId && data.nights[view.nightId] && !data.nights[view.nightId].ended) {
+      showQuizCategoryPicker(view.nightId);
+    } else {
+      // Find any live night in this room
+      const live = Object.values(data.nights||{}).find(n=>!n.ended);
+      if (live) showQuizCategoryPicker(live.id);
+      else toast("No active night — start a night first!");
+    }
+  },
 
   async startQuiz(nightId, categoryId){
     if (!myPlayerId) {
@@ -1194,6 +1211,12 @@ function render(){
   if (!roomCode) return;
   clearInterval(tick);
   const nights = Object.values(data.nights || {}).sort((a,b)=> new Date(b.date)-new Date(a.date));
+  // Show quiz button in header whenever there's a live night
+  const quizBtn = document.getElementById("quizHeaderBtn");
+  if (quizBtn) {
+    const hasLive = nights.some(n=>!n.ended);
+    quizBtn.style.display = hasLive ? "block" : "none";
+  }
 
   if (view.page === "invite") return renderInvite();
   if (view.page === "recap") return renderRecap(view.nightId);
